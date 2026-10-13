@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const platformEnv = vi.hoisted(() => ({ isElectron: false, isRemoteWindow: false }));
+
 const storeState = vi.hoisted(() => ({
   shortcutOverrides: {},
   projects: [
@@ -70,7 +72,7 @@ vi.mock("../sessionMenu", () => ({
 }));
 vi.mock("../sessionViewers/sessionMeta", () => ({ SessionKindIcon: () => null }));
 vi.mock("../../ipc/transport", () => ({ isTauri: false, isElectronShell: false, isRemoteWindow: false, isMac: false }));
-vi.mock("../../platform", () => ({ env: { isElectron: false } }));
+vi.mock("../../platform", () => ({ env: platformEnv }));
 vi.mock("../../hooks/shortcutRegistry", () => ({ labelWithCombo: (label: string) => label }));
 vi.mock("../../hooks/useKeyboardShortcuts", () => ({ DOC_EXPORT_PDF_EVENT: "doc-export-pdf" }));
 
@@ -83,6 +85,7 @@ describe("TabBar project scoping", () => {
     Element.prototype.scrollIntoView = vi.fn();
     storeState.scopeTabsToProject = true;
     storeState.activeProjectId = "A";
+    platformEnv.isRemoteWindow = false;
     storeState.closeTab.mockClear();
     storeState.newScratchTab.mockClear();
   });
@@ -114,6 +117,12 @@ describe("TabBar project scoping", () => {
     expect(storeState.newScratchTab).toHaveBeenCalledWith({ global: true });
     unmount();
     storeState.scopeTabsToProject = false;
+    render(<TabBar />);
+    expect(screen.queryByTitle("tab.newGlobalTerminal")).toBeNull();
+  });
+
+  it("hides the global terminal button in a remote window", () => {
+    platformEnv.isRemoteWindow = true;
     render(<TabBar />);
     expect(screen.queryByTitle("tab.newGlobalTerminal")).toBeNull();
   });

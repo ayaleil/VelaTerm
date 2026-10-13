@@ -72,7 +72,7 @@ describe("visibleTabIds", () => {
     expect(visibleTabIds(state)).toEqual(["doc-1", "browser-1", "eph-x"]);
   });
 
-  it("keeps tabs of a collection visible, since a collection is never an active project", () => {
+  it("treats tabs of a collection as owned by no project, so they stay visible", () => {
     const state = scope({
       projects: [{ id: "A", rootPath: "/a" }, { id: "C", rootPath: "" }],
       openTabs: ["c1", "a1"],

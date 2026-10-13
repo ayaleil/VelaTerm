@@ -167,6 +167,7 @@ afterEach(() => {
   cleanup();
   lifecycle.length = 0;
   localStorage.clear();
+  useTermStore.setState({ scopeTabsToProject: false, activeProjectId: null });
 });
 
 describe("keep-alive invariants when switching sessions in the centre pane", () => {
@@ -521,7 +522,6 @@ describe("empty state with tabs scoped to a project", () => {
     expect(screen.getByText(t("center.noSession"))).toBeTruthy();
     fireEvent.click(screen.getByText(t("center.createTerminal")));
     expect(newScratchTab).toHaveBeenCalledTimes(1);
-    useTermStore.setState({ scopeTabsToProject: false, activeProjectId: null });
   });
 });
 

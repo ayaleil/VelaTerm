@@ -356,6 +356,66 @@ describe("opening sessions and terminals", () => {
     expect(s.ephemeralSessions[s.activeTabId!].projectId).toBe("A");
   });
 
+  it("a session from another project dropped into a pane switches to that project", () => {
+    seed({ sessions: [session("a1", "A"), session("a2", "A"), session("b1", "B"), session("b2", "B")] });
+    useTermStore.getState().openSessionInPane("b2", "p-a1");
+    const s = useTermStore.getState();
+    expect(s.activeTabId).toBe("b2");
+    expect(s.activeProjectId).toBe("B");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
+  });
+
+  it("tiling sessions of another project switches to that project", () => {
+    seed({ sessions: [session("a1", "A"), session("a2", "A"), session("b1", "B"), session("b2", "B")] });
+    useTermStore.getState().tileSessions(["b1", "b2"]);
+    const s = useTermStore.getState();
+    expect(s.activeProjectId).toBe("B");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
+  });
+
+  it("opening a task tab of another project switches to that project", () => {
+    useTermStore.getState().openTaskTab("b1", {
+      task_id: "t1",
+      task_type: "workflow",
+      description: "d",
+      summary: "s",
+    } as Parameters<State["openTaskTab"]>[1]);
+    const s = useTermStore.getState();
+    expect(s.activeTabId).toMatch(/^task-/);
+    expect(s.activeProjectId).toBe("B");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
+  });
+
+  it("saving a browser draft while scoped keeps the active project", async () => {
+    seed({
+      activeProjectId: "B",
+      activeTabId: "browser-1",
+      activeSessionId: null,
+      focusedPaneId: null,
+      openTabs: ["a1", "b1", "browser-1"],
+      browserTabs: { "browser-1": { id: "browser-1", url: "about:blank", title: "Web", loading: false, chromeHidden: false } },
+    });
+    vi.mocked(ipcTree.createSession).mockResolvedValue(session("b9", "B", { kind: "browser" }));
+    await useTermStore.getState().persistBrowserDraft("browser-1");
+    expect(vi.mocked(ipcTree.createSession).mock.calls.at(-1)?.[0].projectId).toBe("B");
+    expect(useTermStore.getState().activeProjectId).toBe("B");
+  });
+
+  it("with scoping off, a browser draft without context lands in the first project", async () => {
+    seed({
+      scopeTabsToProject: false,
+      activeProjectId: "B",
+      activeTabId: "browser-1",
+      activeSessionId: null,
+      focusedPaneId: null,
+      openTabs: ["a1", "b1", "browser-1"],
+      browserTabs: { "browser-1": { id: "browser-1", url: "about:blank", title: "Web", loading: false, chromeHidden: false } },
+    });
+    vi.mocked(ipcTree.createSession).mockResolvedValue(session("a9", "A", { kind: "browser" }));
+    await useTermStore.getState().persistBrowserDraft("browser-1");
+    expect(vi.mocked(ipcTree.createSession).mock.calls.at(-1)?.[0].projectId).toBe("A");
+  });
+
   it("with scoping off, single-tab reuse still replaces a tab from any project", () => {
     seed({
       scopeTabsToProject: false,

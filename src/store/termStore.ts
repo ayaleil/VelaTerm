@@ -623,6 +623,10 @@ function buildLayout(keepEphemeral: boolean): PersistedLayout {
 
 /** Debounces routine layout writes to local storage. */
 let saveLayoutTimer: ReturnType<typeof setTimeout> | undefined;
+function scopedActiveProject(state: Parameters<typeof projectShowing>[0] & { activeTabId: string | null }): string | null {
+  return env.isRemoteWindow ? null : projectShowing(state, state.activeTabId);
+}
+
 function saveLayoutTick() {
   clearTimeout(saveLayoutTimer);
   saveLayoutTimer = setTimeout(() => {
@@ -3245,6 +3249,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         focusedPaneId: null,
       };
     });
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     saveLayoutTick();
   },
 
@@ -3616,6 +3621,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
           }
         : {}),
     });
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     get().pruneEphemeral();
     saveLayoutTick();
   },
@@ -3636,6 +3642,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
     const tiled = ids.slice(0, GRID_MAX);
     for (const id of tiled) st.wakeSession(id);
     set(placed);
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     traceSplit("tile", `tiled ${tiled.length} sessions in tab ${placed.activeTabId}`, {
       sessionIds: tiled,
       tabId: placed.activeTabId ?? undefined,
@@ -3773,8 +3780,12 @@ export const useTermStore = create<TermStore>((set, get) => ({
         st.ephemeralSessions[st.activeSessionId] ??
         null)
       : null;
+    const scopedProject =
+      st.scopeTabsToProject && st.activeProjectId
+        ? st.projects.find((p) => p.id === st.activeProjectId)
+        : undefined;
     const projectId =
-      override?.projectId ?? active?.projectId ?? st.projects[0]?.id ?? null;
+      override?.projectId ?? active?.projectId ?? scopedProject?.id ?? st.projects[0]?.id ?? null;
     if (!projectId) return;
     const groupId = override?.groupId ?? null;
     const parentSessionId = override?.parentSessionId ?? null;
@@ -4404,7 +4415,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? activeSessionId
           : s.mirrorFocusSessionId,
     }));
-    set((s) => ({ activeProjectId: env.isRemoteWindow ? null : projectShowing(s, s.activeTabId) }));
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     // A mirrored arrangement counts as the layout for this session. Without this, a first `loadTree`
     // still in flight would take its restore branch and replace the peer's layout with this client's
     // stale localStorage copy — and then publish that copy back, rearranging the peer too.

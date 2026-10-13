@@ -1,5 +1,5 @@
-// Global terminals, documents, standalone browser tabs and tabs of deleted projects belong to no project and
-// stay visible, so scoping never strands a tab the user still has open.
+// Global terminals, documents, standalone browser tabs, tabs of collections and tabs of deleted projects belong
+// to no project and stay visible, so scoping never strands a tab the user still has open.
 
 import { firstLeaf, type PaneNode } from "../layout/CenterPane/paneTree";
 import type { Session } from "../types";
