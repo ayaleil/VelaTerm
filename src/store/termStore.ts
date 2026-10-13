@@ -127,6 +127,7 @@ import {
 } from "./settings";
 import { docKindOf, makeDocTab, type DocTab } from "./docTab";
 import { traceSplit, type SplitSource } from "./splitTrace";
+import { nextVisibleTab, projectShowing, tabProjectId, visibleTabIds, type TabScopeState } from "./visibleTabs";
 
 // Re-export the public API after moving implementations to settings/docTab, preserving existing import paths.
 export { DEFAULT_MAX_LIVE_TABS } from "./settings";
@@ -649,6 +650,27 @@ function locate(
   return null;
 }
 
+/** Active-tab fields for showing `tabId`, or the empty state for `null`. */
+function activateTab(state: Pick<TermStore, "paneTrees" | "lastActiveSessionTabId">, tabId: string | null) {
+  const tree = tabId ? state.paneTrees[tabId] : undefined;
+  const leaf = tree ? firstLeaf(tree) : null;
+  return {
+    activeTabId: tabId,
+    activeSessionId: leaf?.sessionId ?? null,
+    focusedPaneId: leaf?.paneId ?? null,
+    lastActiveSessionTabId: tree ? tabId : state.lastActiveSessionTabId,
+  };
+}
+
+function retargetReuseAnchor(
+  scope: TabScopeState,
+  activeTabId: string | null,
+  paneTrees: Record<string, PaneNode>,
+): string | null {
+  if (activeTabId && paneTrees[activeTabId]) return activeTabId;
+  return visibleTabIds(scope).find((t) => paneTrees[t]) ?? null;
+}
+
 /** Prunes pane leaves absent from `valid`; returns `null` when the whole tree becomes empty. */
 function pruneTree(
   tree: PaneNode | null | undefined,
@@ -679,6 +701,9 @@ function reconcileTabs(state: {
   docTabs: Record<string, DocTab>;
   browserTabs: Record<string, BrowserTab>;
   taskTabs: Record<string, TaskTab>;
+  scopeTabsToProject?: boolean;
+  activeProjectId?: string | null;
+  projects?: readonly { id: string }[];
 }) {
   const valid = new Set([
     ...state.sessions.map((s) => s.id),
@@ -722,7 +747,17 @@ function reconcileTabs(state: {
   }
   let { activeTabId, activeSessionId, focusedPaneId } = state;
   if (!activeTabId || !openTabs.includes(activeTabId)) {
-    activeTabId = openTabs[0] ?? null;
+    activeTabId =
+      visibleTabIds({
+        scopeTabsToProject: state.scopeTabsToProject ?? false,
+        activeProjectId: state.activeProjectId ?? null,
+        projects: state.projects ?? [],
+        sessions: state.sessions,
+        ephemeralSessions: state.ephemeralSessions,
+        openTabs,
+        paneTrees,
+        taskTabs,
+      })[0] ?? null;
   }
   if (activeTabId && (docTabs[activeTabId] || browserTabs[activeTabId] || taskTabs[activeTabId])) {
     // Document/browser/task tabs have no active session or focused pane.
@@ -926,6 +961,10 @@ interface TermStore {
    * only the one unpinned session slot is reusable.
    */
   pinnedTabs: SessionId[];
+  /** Project whose tabs the bar shows when `scopeTabsToProject` is on; `null` shows every tab. Never persisted. */
+  activeProjectId: string | null;
+  /** Tab that was active when each project was last left, restored on switching back. */
+  lastTabByProject: Record<string, SessionId>;
   /**
    * Status notice after automatic background-tab eviction. Timestamp retriggers notices for repeated labels.
    */
@@ -1249,6 +1288,8 @@ interface TermStore {
   clearSelection: () => void;
   /** Sets the right-panel inspection target. */
   setInspectTarget: (node: SelNode | null) => void;
+  /** Makes a project active; with scoped tabs, switches to its last tab, else its first visible one. */
+  setActiveProject: (projectId: string | null) => void;
   /** Sets or clears one-shot sidebar reveal suppression. */
   setRevealSuppress: (id: SessionId | null) => void;
   setRevealProject: (id: string | null) => void;
@@ -2003,6 +2044,8 @@ export const useTermStore = create<TermStore>((set, get) => ({
   focusedPaneId: null,
   liveTabs: [],
   pinnedTabs: [],
+  activeProjectId: null,
+  lastTabByProject: {},
   liveEvictNotice: null,
   liveEvictAsk: false,
   docTabs: {},
@@ -2079,6 +2122,10 @@ export const useTermStore = create<TermStore>((set, get) => ({
       for (const s of t.sessions) {
         if (!runtimes[s.id]) runtimes[s.id] = { status: "idle" };
       }
+      const activeProjectId =
+        state.activeProjectId && t.projects.some((p) => p.id === state.activeProjectId)
+          ? state.activeProjectId
+          : null;
       let layoutPatch = {};
       if (!layoutRestored) {
         // Restore layout from local storage on the first load only.
@@ -2132,6 +2179,23 @@ export const useTermStore = create<TermStore>((set, get) => ({
               ...reconciled,
               ephemeralSessions: restoredEph,
             };
+            const restoredTab = reconciled.activeTabId;
+            layoutPatch = {
+              ...layoutPatch,
+              activeProjectId:
+                restoredTab && !env.isRemoteWindow
+                  ? tabProjectId(
+                      {
+                        paneTrees: reconciled.paneTrees,
+                        projects: t.projects,
+                        sessions: t.sessions,
+                        ephemeralSessions: restoredEph,
+                        taskTabs: {},
+                      },
+                      restoredTab,
+                    )
+                  : null,
+            };
             if (dormant) {
               // Mark every surviving leaf dormant. Reconciliation has already dropped leaves whose sessions no
               // longer exist, so this covers exactly what will be rendered.
@@ -2162,6 +2226,9 @@ export const useTermStore = create<TermStore>((set, get) => ({
           docTabs: state.docTabs,
           browserTabs: state.browserTabs,
           taskTabs: state.taskTabs,
+          scopeTabsToProject: state.scopeTabsToProject,
+          activeProjectId,
+          projects: t.projects,
         });
       }
       const sidebarTreeViews = state.sidebarTreeViews;
@@ -2180,6 +2247,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         statusFilter: primaryView.statusFilter,
         statusFilterIds: primaryView.statusFilterIds,
         markFilter: primaryView.markFilter,
+        activeProjectId,
         ...layoutPatch,
       };
     });
@@ -2688,6 +2756,30 @@ export const useTermStore = create<TermStore>((set, get) => ({
   clearSelection: () => set({ selection: [], selectionAnchor: null }),
 
   setInspectTarget: (node) => set({ inspectTarget: node }),
+
+  setActiveProject: (projectId) => {
+    // Remote windows follow another window's tabs, so they never filter their own.
+    if (env.isRemoteWindow) return;
+    set((state) => {
+      if (state.activeProjectId === projectId) return {};
+      if (projectId !== null) {
+        const target = state.projects.find((p) => p.id === projectId);
+        if (!target || target.rootPath === "") return {};
+      }
+      const lastTabByProject =
+        state.activeProjectId && state.activeTabId
+          ? { ...state.lastTabByProject, [state.activeProjectId]: state.activeTabId }
+          : state.lastTabByProject;
+      if (!state.scopeTabsToProject || projectId === null) {
+        return { activeProjectId: projectId, lastTabByProject };
+      }
+      const visible = visibleTabIds({ ...state, activeProjectId: projectId });
+      const remembered = lastTabByProject[projectId];
+      const tabId = remembered && visible.includes(remembered) ? remembered : (visible[0] ?? null);
+      return { activeProjectId: projectId, lastTabByProject, ...activateTab(state, tabId) };
+    });
+    saveLayoutTick();
+  },
   setRevealSuppress: (id) => set({ revealSuppressId: id }),
   setRevealProject: (id) => set({ revealProjectId: id }),
 
@@ -2917,12 +3009,14 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
   setActiveTab: (tabId) => {
     set((state) => {
+      const activeProjectId = projectShowing(state, tabId);
       if (state.docTabs[tabId] || state.browserTabs[tabId] || state.taskTabs[tabId]) {
         // Document/browser/task tabs have no session or focused pane, naturally disabling session-only controls.
         return {
           activeTabId: tabId,
           activeSessionId: null,
           focusedPaneId: null,
+          activeProjectId,
         };
       }
       const t = state.paneTrees[tabId];
@@ -2934,6 +3028,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         lastActiveSessionTabId: t ? tabId : state.lastActiveSessionTabId,
         activeSessionId: leaf?.sessionId ?? tabId,
         focusedPaneId: leaf?.paneId ?? null,
+        activeProjectId,
       };
     });
     saveLayoutTick();
@@ -2961,7 +3056,6 @@ export const useTermStore = create<TermStore>((set, get) => ({
     // flows in browser mode, so it cannot express user intent reliably. Repeated stops are idempotent.
     stopTabSessions(get(), tabId);
     set((state) => {
-      const idx = state.openTabs.indexOf(tabId);
       const openTabs = state.openTabs.filter((t) => t !== tabId);
       const paneTrees = { ...state.paneTrees };
       delete paneTrees[tabId];
@@ -2976,7 +3070,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
       let { activeTabId, activeSessionId, focusedPaneId } = state;
       if (activeTabId === tabId) {
-        const nextTab = openTabs[idx] ?? openTabs[idx - 1] ?? null;
+        const nextTab = nextVisibleTab(state, tabId);
         activeTabId = nextTab;
         if (nextTab && paneTrees[nextTab]) {
           const leaf = taskReturnLeaf(paneTrees[nextTab], nextTab, closingTask);
@@ -2991,10 +3085,11 @@ export const useTermStore = create<TermStore>((set, get) => ({
       // Retarget a closed reuse anchor to the current or any remaining visible session tab.
       let lastActiveSessionTabId = state.lastActiveSessionTabId;
       if (lastActiveSessionTabId === tabId) {
-        lastActiveSessionTabId =
-          activeTabId && paneTrees[activeTabId]
-            ? activeTabId
-            : (openTabs.find((t) => paneTrees[t]) ?? null);
+        lastActiveSessionTabId = retargetReuseAnchor(
+          { ...state, openTabs, paneTrees, taskTabs },
+          activeTabId,
+          paneTrees,
+        );
       }
       const pinnedTabs = state.pinnedTabs.filter((t) => t !== tabId);
       return {
@@ -3281,7 +3376,6 @@ export const useTermStore = create<TermStore>((set, get) => ({
       const hasNamed = collectSessionIds(tree).some((sid) => sessById.has(sid));
       if (!hasNamed) return {};
 
-      const idx = state.openTabs.indexOf(tabId);
       const openTabs = state.openTabs.filter((t) => t !== tabId);
       // Remove background tabs from the pinned set because they no longer participate in reuse selection.
       const pinnedTabs = state.pinnedTabs.filter((t) => t !== tabId);
@@ -3298,7 +3392,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         lastActiveSessionTabId,
       } = state;
       if (activeTabId === tabId) {
-        const nextTab = openTabs[idx] ?? openTabs[idx - 1] ?? null;
+        const nextTab = nextVisibleTab(state, tabId);
         activeTabId = nextTab;
         if (nextTab && paneTrees[nextTab]) {
           const leaf = firstLeaf(paneTrees[nextTab]);
@@ -3312,10 +3406,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       }
       // Retarget the reuse anchor to the current or another visible session tab.
       if (lastActiveSessionTabId === tabId) {
-        lastActiveSessionTabId =
-          activeTabId && paneTrees[activeTabId]
-            ? activeTabId
-            : (openTabs.find((t) => paneTrees[t]) ?? null);
+        lastActiveSessionTabId = retargetReuseAnchor({ ...state, openTabs, paneTrees }, activeTabId, paneTrees);
       }
 
       // Apply standard overflow eviction; the newly backgrounded tab sits at the tail and is evicted last.
@@ -4272,6 +4363,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? activeSessionId
           : s.mirrorFocusSessionId,
     }));
+    set((s) => ({ activeProjectId: projectShowing(s, s.activeTabId) }));
     // A mirrored arrangement counts as the layout for this session. Without this, a first `loadTree`
     // still in flight would take its restore branch and replace the peer's layout with this client's
     // stale localStorage copy — and then publish that copy back, rearranging the peer too.
@@ -4641,7 +4733,10 @@ export const useTermStore = create<TermStore>((set, get) => ({
     persistAndApplyVisual(get);
   },
   setScopeTabsToProject: (v) => {
-    set({ scopeTabsToProject: v });
+    set((state) => ({
+      scopeTabsToProject: v,
+      activeProjectId: projectShowing({ ...state, scopeTabsToProject: v }, state.activeTabId),
+    }));
     persistAndApplyVisual(get);
   },
   setSpawnConfirm: (v) => {
