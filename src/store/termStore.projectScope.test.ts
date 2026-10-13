@@ -349,4 +349,24 @@ describe("opening sessions and terminals", () => {
     await useTermStore.getState().addSession({ projectId: "B", groupId: null, name: "b9" });
     expect(useTermStore.getState().activeProjectId).toBeNull();
   });
+  it("with scoping off, a new terminal without context lands in the first project", async () => {
+    seed({ scopeTabsToProject: false, activeProjectId: "B", activeSessionId: null, activeTabId: null, inspectTarget: null });
+    await useTermStore.getState().newScratchTab();
+    const s = useTermStore.getState();
+    expect(s.ephemeralSessions[s.activeTabId!].projectId).toBe("A");
+  });
+
+  it("with scoping off, single-tab reuse still replaces a tab from any project", () => {
+    seed({
+      scopeTabsToProject: false,
+      singleTabMode: true,
+      sessions: [session("a1", "A", { kind: "claude" }), session("b2", "B", { kind: "claude" })],
+      openTabs: ["a1"],
+      paneTrees: { a1: leaf("a1") },
+      activeTabId: null,
+      activeSessionId: null,
+    });
+    useTermStore.getState().openSession("b2");
+    expect(useTermStore.getState().openTabs).toEqual(["b2"]);
+  });
 });

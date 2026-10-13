@@ -5086,7 +5086,9 @@ export const useTermStore = create<TermStore>((set, get) => ({
       targetProject ??
       overrideProject ??
       (active && st.projects.find((p) => p.id === active.projectId)) ??
-      (st.activeProjectId ? st.projects.find((p) => p.id === st.activeProjectId) : undefined) ??
+      (st.scopeTabsToProject && st.activeProjectId
+        ? st.projects.find((p) => p.id === st.activeProjectId)
+        : undefined) ??
       st.projects[0];
     // Working-directory priority: explicit, inspected project/group root, runtime cwd, session cwd, session
     // project root, then first project root. Inspection deliberately excludes the previous session's runtime cwd.
