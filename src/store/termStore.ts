@@ -2122,8 +2122,10 @@ export const useTermStore = create<TermStore>((set, get) => ({
       for (const s of t.sessions) {
         if (!runtimes[s.id]) runtimes[s.id] = { status: "idle" };
       }
-      const activeProjectId =
-        state.activeProjectId && t.projects.some((p) => p.id === state.activeProjectId)
+      let activeProjectId =
+        !env.isRemoteWindow &&
+        state.activeProjectId &&
+        t.projects.some((p) => p.id === state.activeProjectId)
           ? state.activeProjectId
           : null;
       let layoutPatch = {};
@@ -2214,7 +2216,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         }
       } else {
         // Later tree refreshes reconcile current memory state only, preserving visible and background tabs.
-        layoutPatch = reconcileTabs({
+        const reconciled = reconcileTabs({
           sessions: t.sessions,
           ephemeralSessions: state.ephemeralSessions,
           openTabs: state.openTabs,
@@ -2230,6 +2232,23 @@ export const useTermStore = create<TermStore>((set, get) => ({
           activeProjectId,
           projects: t.projects,
         });
+        layoutPatch = reconciled;
+        // A refresh can move the active tab's session to another project, so follow the tab.
+        if (!env.isRemoteWindow) {
+          activeProjectId = projectShowing(
+            {
+              scopeTabsToProject: state.scopeTabsToProject,
+              activeProjectId,
+              projects: t.projects,
+              sessions: t.sessions,
+              ephemeralSessions: state.ephemeralSessions,
+              openTabs: reconciled.openTabs,
+              paneTrees: reconciled.paneTrees,
+              taskTabs: reconciled.taskTabs,
+            },
+            reconciled.activeTabId,
+          );
+        }
       }
       const sidebarTreeViews = state.sidebarTreeViews;
       const primaryView =
@@ -3009,7 +3028,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
   setActiveTab: (tabId) => {
     set((state) => {
-      const activeProjectId = projectShowing(state, tabId);
+      const activeProjectId = env.isRemoteWindow ? null : projectShowing(state, tabId);
       if (state.docTabs[tabId] || state.browserTabs[tabId] || state.taskTabs[tabId]) {
         // Document/browser/task tabs have no session or focused pane, naturally disabling session-only controls.
         return {
@@ -4363,7 +4382,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? activeSessionId
           : s.mirrorFocusSessionId,
     }));
-    set((s) => ({ activeProjectId: projectShowing(s, s.activeTabId) }));
+    set((s) => ({ activeProjectId: env.isRemoteWindow ? null : projectShowing(s, s.activeTabId) }));
     // A mirrored arrangement counts as the layout for this session. Without this, a first `loadTree`
     // still in flight would take its restore branch and replace the peer's layout with this client's
     // stale localStorage copy — and then publish that copy back, rearranging the peer too.
@@ -4735,7 +4754,9 @@ export const useTermStore = create<TermStore>((set, get) => ({
   setScopeTabsToProject: (v) => {
     set((state) => ({
       scopeTabsToProject: v,
-      activeProjectId: projectShowing({ ...state, scopeTabsToProject: v }, state.activeTabId),
+      activeProjectId: env.isRemoteWindow
+        ? null
+        : projectShowing({ ...state, scopeTabsToProject: v }, state.activeTabId),
     }));
     persistAndApplyVisual(get);
   },

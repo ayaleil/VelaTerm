@@ -225,4 +225,25 @@ describe("keeping the active tab visible", () => {
     expect(s.activeProjectId).toBeNull();
     expect(visibleTabIds(s)).toEqual(["b1"]);
   });
+
+  it("follows the active tab when a refresh moves its session to another project", async () => {
+    await useTermStore.getState().loadTree();
+    seed();
+    tree.data = {
+      ...tree.data,
+      sessions: [session("a1", "B"), session("a2", "A"), session("b1", "B")],
+    };
+    await useTermStore.getState().loadTree();
+    const s = useTermStore.getState();
+    expect(s.activeTabId).toBe("a1");
+    expect(s.activeProjectId).toBe("B");
+    expect(visibleTabIds(s)).toContain("a1");
+  });
+
+  it("keeps the active project null in a remote window when activating a tab", () => {
+    seed({ activeProjectId: null });
+    env.isRemoteWindow = true;
+    useTermStore.getState().setActiveTab("b1");
+    expect(useTermStore.getState().activeProjectId).toBeNull();
+  });
 });
