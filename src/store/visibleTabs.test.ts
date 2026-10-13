@@ -72,6 +72,18 @@ describe("visibleTabIds", () => {
     expect(visibleTabIds(state)).toEqual(["doc-1", "browser-1", "eph-x"]);
   });
 
+  it("keeps tabs of a collection visible, since a collection is never an active project", () => {
+    const state = scope({
+      projects: [{ id: "A", rootPath: "/a" }, { id: "C", rootPath: "" }],
+      openTabs: ["c1", "a1"],
+      paneTrees: { c1: leaf("c1"), a1: leaf("a1") },
+      sessions: [session("c1", "C"), session("a1", "A")],
+      ephemeralSessions: {},
+    });
+    expect(tabProjectId(state, "c1")).toBeNull();
+    expect(visibleTabIds(state)).toEqual(["c1", "a1"]);
+  });
+
   it("keeps tabs of a deleted project visible instead of stranding them", () => {
     const state = scope({
       openTabs: ["eph-z"],
@@ -107,6 +119,10 @@ describe("nextVisibleTab", () => {
 
   it("falls back to the previous visible tab at the end", () => {
     expect(nextVisibleTab(scope(), "a2")).toBe("g1");
+  });
+
+  it("falls back to the first visible tab when the closing tab is already hidden", () => {
+    expect(nextVisibleTab(scope(), "b1")).toBe("a1");
   });
 
   it("returns null when the closing tab was the last visible one", () => {

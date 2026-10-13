@@ -6,7 +6,7 @@ import type { Session } from "../types";
 
 export interface TabOwnerState {
   paneTrees: Readonly<Record<string, PaneNode>>;
-  projects: readonly { id: string }[];
+  projects: readonly { id: string; rootPath?: string }[];
   sessions: readonly Session[];
   ephemeralSessions: Readonly<Record<string, Session>>;
   taskTabs: Readonly<Record<string, { sessionId: string }>>;
@@ -20,7 +20,9 @@ export interface TabScopeState extends TabOwnerState {
 
 export function sessionProjectId(state: Pick<TabOwnerState, "projects">, session: Session): string | null {
   if (session.global || !session.projectId) return null;
-  return state.projects.some((p) => p.id === session.projectId) ? session.projectId : null;
+  const project = state.projects.find((p) => p.id === session.projectId);
+  if (!project || project.rootPath === "") return null;
+  return project.id;
 }
 
 export function tabProjectId(state: TabOwnerState, tabId: string): string | null {
