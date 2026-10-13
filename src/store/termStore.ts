@@ -1057,6 +1057,8 @@ interface TermStore {
   inspectorTab: InspectorTab;
   /** Single-tab mode: reuse the session slot and keep replaced tabs alive in the background. */
   singleTabMode: boolean;
+  /** Tab bar shows only the active project's tabs plus global terminals. */
+  scopeTabsToProject: boolean;
   /** Terminal renderer: stable DOM or accelerated WebGL with GPU context limits. */
   termRenderer: TermRenderer;
   /** Optional full redraw when returning to a tab, for GPU artifacts or blank frames. */
@@ -1497,6 +1499,7 @@ interface TermStore {
   setInspectorTab: (v: InspectorTab) => void;
   /** Toggles persisted single-tab mode. */
   setSingleTabMode: (v: boolean) => void;
+  setScopeTabsToProject: (v: boolean) => void;
   /** Toggles confirmation before spawning child sessions. */
   setSpawnConfirm: (v: boolean) => void;
   /** Remembers the quit dialog's "save workspace" choice as the default for the next exit. */
@@ -1706,6 +1709,7 @@ function persistAndApplyVisual(getState: () => TermStore) {
     navLayout: s.navLayout,
     inspectorTab: s.inspectorTab,
     singleTabMode: s.singleTabMode,
+    scopeTabsToProject: s.scopeTabsToProject,
     termRenderer: s.termRenderer,
     redrawOnReveal: s.redrawOnReveal,
     outputScheduler: s.outputScheduler,
@@ -4634,6 +4638,10 @@ export const useTermStore = create<TermStore>((set, get) => ({
   },
   setSingleTabMode: (v) => {
     set({ singleTabMode: v });
+    persistAndApplyVisual(get);
+  },
+  setScopeTabsToProject: (v) => {
+    set({ scopeTabsToProject: v });
     persistAndApplyVisual(get);
   },
   setSpawnConfirm: (v) => {
