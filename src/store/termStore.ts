@@ -127,7 +127,14 @@ import {
 } from "./settings";
 import { docKindOf, makeDocTab, type DocTab } from "./docTab";
 import { traceSplit, type SplitSource } from "./splitTrace";
-import { nextVisibleTab, projectShowing, tabProjectId, visibleTabIds, type TabScopeState } from "./visibleTabs";
+import {
+  nextVisibleTab,
+  projectShowing,
+  sessionProjectId,
+  tabProjectId,
+  visibleTabIds,
+  type TabScopeState,
+} from "./visibleTabs";
 
 // Re-export the public API after moving implementations to settings/docTab, preserving existing import paths.
 export { DEFAULT_MAX_LIVE_TABS } from "./settings";
@@ -660,6 +667,15 @@ function activateTab(state: Pick<TermStore, "paneTrees" | "lastActiveSessionTabI
     focusedPaneId: leaf?.paneId ?? null,
     lastActiveSessionTabId: tree ? tabId : state.lastActiveSessionTabId,
   };
+}
+
+/** Project whose tabs will show `sessionId` once opened, or `null` when it shows in every project. */
+function projectOpening(state: TermStore, sessionId: string): string | null {
+  const holder =
+    locate(state.paneTrees, state.openTabs, sessionId) ?? locate(state.paneTrees, state.liveTabs, sessionId);
+  if (holder) return tabProjectId(state, holder.tabId);
+  const session = state.sessions.find((s) => s.id === sessionId) ?? state.ephemeralSessions[sessionId];
+  return session ? sessionProjectId(state, session) : null;
 }
 
 function retargetReuseAnchor(
@@ -1629,6 +1645,8 @@ interface TermStore {
     shell?: string | null;
     cwd?: string | null;
     name?: string;
+    /** Global terminal: no project, home directory, visible in every project's tab bar. */
+    global?: boolean;
     /** Project-tree target used to avoid inheriting an unrelated active session directory. */
     target?: {
       projectId: string;
@@ -2407,6 +2425,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       };
     });
     saveSidebarViewsTick(get);
+    get().setActiveProject(input.projectId);
     // Persist expansion and reload authoritative tree data in the background after the terminal can open.
     const expand = input.parentSessionId
       ? tree.setCollapsed("session", input.parentSessionId, false)
@@ -2861,6 +2880,8 @@ export const useTermStore = create<TermStore>((set, get) => ({
     // Explicitly opening a session always starts it, so drop any leftover dormant mark from a restored
     // workspace whose pane was closed before it was ever woken. Non-dormant sessions are unaffected.
     get().wakeSession(id);
+    const owner = projectOpening(get(), id);
+    if (owner !== null && owner !== get().activeProjectId) get().setActiveProject(owner);
     set((state) => {
       // Opening/focusing no longer clears notifications immediately; `useNotifications` waits two seconds.
       const notifications = state.notifications;
@@ -2925,7 +2946,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         state.singleTabMode && !opts?.newTab && !isTerminalKind
           ? isReusableTab(state.activeTabId)
             ? state.activeTabId
-            : (state.openTabs.find((t) => isReusableTab(t)) ?? null)
+            : (visibleTabIds(state).find((t) => isReusableTab(t)) ?? null)
           : null;
       const canReuse = reuseTabId != null;
 
@@ -3498,6 +3519,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       hotkey: null,
       // Attach a split terminal beneath its focused source session so the sidebar reflects its origin.
       parentSessionId: focused.id,
+      ...(focused.global ? { global: true } : {}),
       // Ephemeral sessions start collapsed so nested splits do not automatically expand the Scratch tree.
       collapsed: true,
       worktreePath: null,
@@ -4988,6 +5010,46 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
   newScratchTab: async (opts) => {
     const st = get();
+    const effShell = (opts?.shell === undefined ? st.defaultShell : opts.shell) || null;
+    const create = (placement: Pick<Session, "projectId" | "groupId" | "cwd" | "global">) => {
+      const id = `eph-${genId()}`;
+      const ephemeral: Session = {
+        id,
+        ...placement,
+        name: opts?.name ?? nextTerminalName(st.sessions, st.ephemeralSessions),
+        kind: "terminal",
+        shell: effShell,
+        envJson: null,
+        initCmd: null,
+        hotkey: null,
+        parentSessionId: null,
+        // Ephemeral sessions start collapsed to keep nested Scratch entries compact.
+        collapsed: true,
+        worktreePath: null,
+        sortOrder: 0,
+        // Assign current Unix time to frontend-only sessions instead of displaying the epoch.
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+      const leaf = makeLeaf(id);
+      set((state) => ({
+        ephemeralSessions: { ...state.ephemeralSessions, [id]: ephemeral },
+        runtimes: { ...state.runtimes, [id]: { status: "idle" } },
+        openTabs: [...state.openTabs, id],
+        // Scratch terminals are pinned and never replaced by single-tab reuse.
+        pinnedTabs: [...state.pinnedTabs, id],
+        paneTrees: { ...state.paneTrees, [id]: leaf },
+        activeTabId: id,
+        lastActiveSessionTabId: id,
+        activeSessionId: id,
+        focusedPaneId: leaf.paneId,
+      }));
+      saveLayoutTick();
+    };
+    if (opts?.global) {
+      // No cwd: the backend starts the shell in the user's home directory.
+      create({ projectId: "", groupId: null, cwd: null, global: true });
+      return;
+    }
     const { activeSessionId, inspectTarget } = st;
     const targetSession = opts?.target?.sessionId
       ? (st.sessions.find((s) => s.id === opts.target?.sessionId) ??
@@ -5013,15 +5075,18 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? st.projects.find((p) => p.id === overrideGroup.projectId)
           : undefined;
     // Otherwise follow the active session's project and working directory, matching split behavior.
-    const active = activeSessionId
+    const activeSession = activeSessionId
       ? (st.sessions.find((s) => s.id === activeSessionId) ??
         st.ephemeralSessions[activeSessionId] ??
         null)
       : null;
+    // A global terminal belongs to no project, so a terminal opened from it follows the active project.
+    const active = activeSession?.global ? null : activeSession;
     const project =
       targetProject ??
       overrideProject ??
       (active && st.projects.find((p) => p.id === active.projectId)) ??
+      (st.activeProjectId ? st.projects.find((p) => p.id === st.activeProjectId) : undefined) ??
       st.projects[0];
     // Working-directory priority: explicit, inspected project/group root, runtime cwd, session cwd, session
     // project root, then first project root. Inspection deliberately excludes the previous session's runtime cwd.
@@ -5044,52 +5109,18 @@ export const useTermStore = create<TermStore>((set, get) => ({
       cwd = cwd ?? active.cwd ?? null;
     }
     cwd = cwd ?? project?.rootPath ?? null;
-    const id = `eph-${genId()}`;
-    // Use the global default shell when scratch creation does not specify one.
-    const effShell =
-      (opts?.shell === undefined ? st.defaultShell : opts.shell) || null;
-    const ephemeral: Session = {
-      id,
-      projectId:
-        opts?.target?.projectId ??
-        overrideProject?.id ??
-        active?.projectId ??
-        project?.id ??
-        "",
+    const projectId =
+      opts?.target?.projectId ?? overrideProject?.id ?? active?.projectId ?? project?.id ?? "";
+    if (st.projects.some((p) => p.id === projectId) && projectId !== get().activeProjectId) {
+      get().setActiveProject(projectId);
+    }
+    create({
+      projectId,
       groupId: opts?.target
         ? (opts.target.groupId ?? targetSession?.groupId ?? null)
-        : (overrideGroup?.id ??
-          (overrideProject ? null : active?.groupId) ??
-          null),
-      name: opts?.name ?? nextTerminalName(st.sessions, st.ephemeralSessions),
-      kind: "terminal",
-      shell: effShell,
+        : (overrideGroup?.id ?? (overrideProject ? null : active?.groupId) ?? null),
       cwd,
-      envJson: null,
-      initCmd: null,
-      hotkey: null,
-      parentSessionId: null,
-      // Ephemeral sessions start collapsed to keep nested Scratch entries compact.
-      collapsed: true,
-      worktreePath: null,
-      sortOrder: 0,
-      // Assign current Unix time to frontend-only sessions instead of displaying the epoch.
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-    const leaf = makeLeaf(id);
-    set((state) => ({
-      ephemeralSessions: { ...state.ephemeralSessions, [id]: ephemeral },
-      runtimes: { ...state.runtimes, [id]: { status: "idle" } },
-      openTabs: [...state.openTabs, id],
-      // Scratch terminals are pinned and never replaced by single-tab reuse.
-      pinnedTabs: [...state.pinnedTabs, id],
-      paneTrees: { ...state.paneTrees, [id]: leaf },
-      activeTabId: id,
-      lastActiveSessionTabId: id,
-      activeSessionId: id,
-      focusedPaneId: leaf.paneId,
-    }));
-    saveLayoutTick();
+    });
   },
 
   setEphemeralShell: (id, shell) =>

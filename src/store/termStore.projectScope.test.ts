@@ -24,7 +24,11 @@ vi.mock("../ipc/commands", () => ({
   ptyKill: vi.fn().mockResolvedValue(undefined),
   listShells: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("../ipc/tree", () => ({ listTree: vi.fn(async () => tree.data) }));
+vi.mock("../ipc/tree", () => ({
+  listTree: vi.fn(async () => tree.data),
+  createSession: vi.fn(),
+  setCollapsed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../ipc/chat", () => ({
   chatClear: vi.fn(),
   setSessionEngine: vi.fn(),
@@ -38,6 +42,7 @@ vi.mock("../platform", () => ({
   platform: { env, dialog: { pickDirectory: vi.fn(), saveFile: vi.fn() } },
 }));
 
+import * as ipcTree from "../ipc/tree";
 import { useTermStore } from "./termStore";
 import { visibleTabIds } from "./visibleTabs";
 
@@ -244,6 +249,104 @@ describe("keeping the active tab visible", () => {
     seed({ activeProjectId: null });
     env.isRemoteWindow = true;
     useTermStore.getState().setActiveTab("b1");
+    expect(useTermStore.getState().activeProjectId).toBeNull();
+  });
+});
+
+describe("opening sessions and terminals", () => {
+  it("switches to the project of a session opened from outside the sidebar", () => {
+    useTermStore.getState().openSession("b1");
+    const s = useTermStore.getState();
+    expect(s.activeProjectId).toBe("B");
+    expect(s.activeTabId).toBe("b1");
+  });
+
+  it("switches to the project of a session that has no tab yet", () => {
+    seed({ sessions: [session("a1", "A"), session("a2", "A"), session("b1", "B"), session("b2", "B")] });
+    useTermStore.getState().openSession("b2");
+    const s = useTermStore.getState();
+    expect(s.activeProjectId).toBe("B");
+    expect(s.activeTabId).toBe("b2");
+  });
+
+  it("single-tab reuse never replaces another project's hidden tab", () => {
+    seed({
+      singleTabMode: true,
+      sessions: [session("a1", "A", { kind: "claude" }), session("b2", "B", { kind: "claude" })],
+      openTabs: ["a1"],
+      paneTrees: { a1: leaf("a1") },
+    });
+    useTermStore.getState().openSession("b2");
+    const s = useTermStore.getState();
+    expect(s.openTabs).toEqual(["a1", "b2"]);
+    expect(s.liveTabs).toEqual([]);
+    expect(s.activeTabId).toBe("b2");
+  });
+
+  it("new terminal from a global tab joins the active project", async () => {
+    seed({
+      ephemeralSessions: { g1: globalTerm("g1") },
+      openTabs: ["a1", "g1"],
+      paneTrees: { a1: leaf("a1"), g1: leaf("g1") },
+      activeTabId: "g1",
+      activeSessionId: "g1",
+      focusedPaneId: "p-g1",
+    });
+    await useTermStore.getState().newScratchTab();
+    const s = useTermStore.getState();
+    const created = s.ephemeralSessions[s.activeTabId!];
+    expect(created.projectId).toBe("A");
+    expect(created.cwd).toBe("/tmp/A");
+    expect(created.global).toBeUndefined();
+  });
+
+  it("creates a global terminal that stays visible in every project", async () => {
+    await useTermStore.getState().newScratchTab({ global: true });
+    const id = useTermStore.getState().activeTabId!;
+    const created = useTermStore.getState().ephemeralSessions[id];
+    expect(created.global).toBe(true);
+    expect(created.projectId).toBe("");
+    expect(created.cwd).toBeNull();
+    expect(useTermStore.getState().activeProjectId).toBe("A");
+    useTermStore.getState().setActiveProject("B");
+    expect(visibleTabIds(useTermStore.getState())).toContain(id);
+  });
+
+  it("splitting a global terminal creates another global terminal", async () => {
+    seed({
+      ephemeralSessions: { g1: globalTerm("g1") },
+      openTabs: ["g1"],
+      paneTrees: { g1: leaf("g1") },
+      activeTabId: "g1",
+      activeSessionId: "g1",
+      focusedPaneId: "p-g1",
+    });
+    await useTermStore.getState().splitNew("horizontal");
+    const s = useTermStore.getState();
+    const split = s.ephemeralSessions[s.activeSessionId!];
+    expect(split.id).not.toBe("g1");
+    expect(split.global).toBe(true);
+    expect(split.projectId).toBe("");
+  });
+
+  it("a new terminal for another project switches to that project", async () => {
+    await useTermStore.getState().newScratchTab({ target: { projectId: "B" } });
+    const s = useTermStore.getState();
+    expect(s.activeProjectId).toBe("B");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
+  });
+
+  it("creating a session for a project makes it the active project", async () => {
+    vi.mocked(ipcTree.createSession).mockResolvedValue(session("b9", "B"));
+    await useTermStore.getState().addSession({ projectId: "B", groupId: null, name: "b9" });
+    expect(useTermStore.getState().activeProjectId).toBe("B");
+  });
+
+  it("creating a session keeps the active project null in a remote window", async () => {
+    seed({ activeProjectId: null });
+    env.isRemoteWindow = true;
+    vi.mocked(ipcTree.createSession).mockResolvedValue(session("b9", "B"));
+    await useTermStore.getState().addSession({ projectId: "B", groupId: null, name: "b9" });
     expect(useTermStore.getState().activeProjectId).toBeNull();
   });
 });
