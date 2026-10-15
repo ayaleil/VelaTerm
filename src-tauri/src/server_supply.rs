@@ -21,10 +21,15 @@ use serde::Deserialize;
 /// Distribution root shared with the updater.
 const DL_BASE: &str = "https://dl.velaterm.com";
 
-/// Embedded minisign public key, which must match `plugins.updater.pubkey` in tauri.conf.json because
-/// publish-server.sh signs vela-server with the updater key. Tauri wraps the two-line minisign public-key
-/// file in base64. Update this constant whenever the updater key rotates.
-const TAURI_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3QkY3RjE5NjU5NEIzN0YKUldSL3M1UmxHWCsvaDF4bkdReURmL2FLV2ZRbDU1V0xyRGV0dHZwQnBibWxPU3pGdXRjc2x4eCsK";
+/// Upstream's release key. The vela-server artifacts this module downloads from `DL_BASE` are published and
+/// signed by upstream, so verifying them keeps using upstream's key even in this fork. Tauri wraps the
+/// two-line minisign public-key file in base64.
+const SERVER_SUPPLY_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3QkY3RjE5NjU5NEIzN0YKUldSL3M1UmxHWCsvaDF4bkdReURmL2FLV2ZRbDU1V0xyRGV0dHZwQnBibWxPU3pGdXRjc2x4eCsK";
+
+/// This fork's updater key, which must match `plugins.updater.pubkey` in tauri.conf.json. Desktop updates are
+/// built and signed by this fork's release workflow, so they verify against this key and not upstream's.
+/// Update this constant whenever the fork's updater key rotates.
+const UPDATE_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg5NDZBNTRDRTU4NTdBNzkKUldSNWVvWGxUS1ZHaWFEaWJYQjRaY0VrOFpSakp0ODRSQW85WDI1OGo0VXRDaEZQTktzTm5uOU4K";
 
 /// server-manifest.json containing one `{url, sha256, signature}` entry per platform.
 #[derive(Debug, Deserialize)]
@@ -218,10 +223,10 @@ pub fn supply_dev_override(
     supply_from_zip(&bin, &data, platkey)
 }
 
-/// Parse the embedded key as a minisign PublicKey.
-fn public_key() -> Result<minisign_verify::PublicKey, String> {
+/// Parse one of the embedded keys as a minisign PublicKey.
+fn public_key(key_b64: &str) -> Result<minisign_verify::PublicKey, String> {
     let decoded = base64::engine::general_purpose::STANDARD
-        .decode(TAURI_PUBKEY_B64.trim())
+        .decode(key_b64.trim())
         .map_err(|e| format!("builtin public key base64 decode failed: {e}"))?;
     let text =
         String::from_utf8(decoded).map_err(|e| format!("builtin public key is not UTF-8: {e}"))?;
@@ -235,9 +240,9 @@ fn public_key() -> Result<minisign_verify::PublicKey, String> {
         .map_err(|e| format!("failed to parse minisign public key: {e}"))
 }
 
-/// Verify data against the manifest's base64 minisign signature using the embedded key.
-pub fn verify_signature(data: &[u8], sig_b64: &str) -> Result<(), String> {
-    let pk = public_key()?;
+/// Verify data against a base64 minisign signature using the given embedded key.
+fn verify_with(key_b64: &str, data: &[u8], sig_b64: &str) -> Result<(), String> {
+    let pk = public_key(key_b64)?;
     let sig_decoded = base64::engine::general_purpose::STANDARD
         .decode(sig_b64.trim())
         .map_err(|e| format!("signature base64 decode failed: {e}"))?;
@@ -249,8 +254,18 @@ pub fn verify_signature(data: &[u8], sig_b64: &str) -> Result<(), String> {
         .map_err(|e| format!("signature verification failed: {e}"))
 }
 
-/// `velaterm --verify-update <file> <signature>`: verify a downloaded desktop update with the embedded
-/// release key. The signature is the base64 `.sig` text from the updater manifest. Returns the process
+/// Verify a vela-server artifact from the distribution root, which upstream signs.
+pub fn verify_signature(data: &[u8], sig_b64: &str) -> Result<(), String> {
+    verify_with(SERVER_SUPPLY_PUBKEY_B64, data, sig_b64)
+}
+
+/// Verify a desktop update package, which this fork's release workflow signs.
+pub fn verify_update_signature(data: &[u8], sig_b64: &str) -> Result<(), String> {
+    verify_with(UPDATE_PUBKEY_B64, data, sig_b64)
+}
+
+/// `velaterm --verify-update <file> <signature>`: verify a downloaded desktop update with this fork's
+/// updater key. The signature is the base64 `.sig` text from the updater manifest. Returns the process
 /// exit status (0 verified, 1 rejected, 2 misuse) and prints only the failure reason.
 pub fn run_verify_update(args: &[String]) -> i32 {
     let (Some(path), Some(sig)) = (args.get(2), args.get(3)) else {
@@ -259,7 +274,7 @@ pub fn run_verify_update(args: &[String]) -> i32 {
     };
     let result = std::fs::read(path)
         .map_err(|e| format!("failed to read {path}: {e}"))
-        .and_then(|data| verify_signature(&data, sig));
+        .and_then(|data| verify_update_signature(&data, sig));
     match result {
         Ok(()) => 0,
         Err(e) => {
@@ -546,8 +561,25 @@ mod tests {
     }
 
     #[test]
-    fn builtin_public_key_parses() {
-        // Ensure minisign-verify parses the embedded key, catching base64 transcription errors.
-        assert!(public_key().is_ok(), "the built-in public key should parse");
+    fn builtin_public_keys_parse() {
+        // Ensure minisign-verify parses both embedded keys, catching base64 transcription errors.
+        assert!(
+            public_key(SERVER_SUPPLY_PUBKEY_B64).is_ok(),
+            "the vela-server supply key should parse"
+        );
+        assert!(
+            public_key(UPDATE_PUBKEY_B64).is_ok(),
+            "the updater key should parse"
+        );
+    }
+
+    #[test]
+    fn the_two_builtin_keys_are_distinct() {
+        // A fork that copies upstream's key into both slots cannot sign its own updates, and the mistake is
+        // invisible until an update is rejected in the field.
+        assert_ne!(
+            SERVER_SUPPLY_PUBKEY_B64, UPDATE_PUBKEY_B64,
+            "the updater key must be this fork's own, not upstream's"
+        );
     }
 }
