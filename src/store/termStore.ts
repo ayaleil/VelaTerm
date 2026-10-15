@@ -5212,8 +5212,9 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? { pinnedTabs: [...state.pinnedTabs, id] }
           : {},
       );
-    } catch {
-      /* Keep the draft. */
+    } catch (err) {
+      // Keep the draft; it still works but will not survive a restart.
+      console.warn("newScratchTab: could not save terminal under its project", err);
     }
   },
 

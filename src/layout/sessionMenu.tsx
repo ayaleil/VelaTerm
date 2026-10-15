@@ -609,7 +609,7 @@ export function useSessionMenu(opts?: { groupNavigation?: boolean }): SessionMen
     if (created) openSession(created.id);
   };
 
-  // New Terminal is saved as a top-level node of its project. Multiple detected shells produce a submenu;
+  // New Terminal is saved under its project (inside the target group, if any). Multiple detected shells produce a submenu;
   // otherwise create directly with the configured default, matching tab plus/Cmd+T.
   const newTerminalItem = (
     projectId: string,
