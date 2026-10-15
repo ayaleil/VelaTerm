@@ -200,7 +200,7 @@ export function useSessionMenu(opts?: { groupNavigation?: boolean }): SessionMen
   const openSession = useTermStore((s) => s.openSession);
   const openSessionInSplit = useTermStore((s) => s.openSessionInSplit);
   const openSessionInPane = useTermStore((s) => s.openSessionInPane);
-  // New Terminal creates an eph- draft only in the center pane, without persistence or a tree node.
+  // New Terminal opens in the center pane and is saved under its project (see newScratchTab).
   const newScratchTab = useTermStore((s) => s.newScratchTab);
   const openMerge = useTermStore((s) => s.openMerge);
   const openChanges = useTermStore((s) => s.openChanges);
@@ -609,7 +609,7 @@ export function useSessionMenu(opts?: { groupNavigation?: boolean }): SessionMen
     if (created) openSession(created.id);
   };
 
-  // New Terminal creates a center-only eph- draft, never a tree child. Multiple detected shells produce a submenu;
+  // New Terminal is saved under its project (inside the target group, if any). Multiple detected shells produce a submenu;
   // otherwise create directly with the configured default, matching tab plus/Cmd+T.
   const newTerminalItem = (
     projectId: string,
