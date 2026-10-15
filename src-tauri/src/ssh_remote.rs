@@ -198,7 +198,7 @@ fn session_sys_map() -> &'static Mutex<HashMap<String, RemoteSystem>> {
 }
 
 /// Record a session's detected system for later shell-specific commands.
-fn set_session_sys(session: &str, sys: &RemoteSystem) {
+pub(crate) fn set_session_sys(session: &str, sys: &RemoteSystem) {
     session_sys_map()
         .lock()
         .unwrap()
@@ -206,7 +206,7 @@ fn set_session_sys(session: &str, sys: &RemoteSystem) {
 }
 
 /// Read a session's detected system, falling back to Linux/POSIX when it was never registered.
-fn session_sys(session: &str) -> RemoteSystem {
+pub(crate) fn session_sys(session: &str) -> RemoteSystem {
     session_sys_map()
         .lock()
         .unwrap()
@@ -216,7 +216,7 @@ fn session_sys(session: &str) -> RemoteSystem {
 }
 
 /// Forget a session's detected system on disconnect.
-fn clear_session_sys(session: &str) {
+pub(crate) fn clear_session_sys(session: &str) {
     session_sys_map().lock().unwrap().remove(session);
 }
 
