@@ -769,7 +769,10 @@ function buildMenu() {
 // download replaces the file the app was launched from, then the app restarts from it. Other installations
 // (unpacked builds, macOS, Windows) report updates as unsupported, and the page hides the feature.
 
-const UPDATE_ENDPOINT = "https://velaterm.com/api/updater";
+// Static manifests published as release assets by .github/workflows/release.yml, one per architecture, each
+// carrying {version, url, signature} for that AppImage. A static host cannot answer a query-parameterized API,
+// which is why the arch is part of the file name and the "is this newer" decision happens here instead.
+const UPDATE_ENDPOINT = "https://github.com/eperfecto/VelaTerm/releases/latest/download";
 
 /** Manifest of the release found by the last check; the renderer never supplies the URL or signature. */
 let pendingUpdate = null;
@@ -791,19 +794,15 @@ function compareVersions(a, b) {
   return 0;
 }
 
-/** Ask the update service for a newer release. Returns what the page shows, or null when up to date. */
-async function checkForUpdate(headers) {
+/** Fetch the published manifest for this architecture. Returns what the page shows, or null when up to date. */
+async function checkForUpdate() {
   if (!updaterSupported()) throw new Error("Automatic updates are not available for this installation.");
   const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
   const current = app.getVersion();
-  const url = `${UPDATE_ENDPOINT}/linux/${arch}?current_version=${encodeURIComponent(current)}`;
-  // Forward only update telemetry headers and identify this shell's updater to the service.
-  const installId = headers && typeof headers["X-Install-Id"] === "string" ? headers["X-Install-Id"] : "";
-  const language = headers && typeof headers["X-App-Language"] === "string" ? headers["X-App-Language"] : "";
-  const requestHeaders = { "User-Agent": `velaterm-electron-updater/${current}` };
-  if (installId) requestHeaders["X-Install-Id"] = installId;
-  if (language) requestHeaders["X-App-Language"] = language;
-  const res = await net.fetch(url, { headers: requestHeaders });
+  const url = `${UPDATE_ENDPOINT}/latest-linux-${arch}.json`;
+  // The manifest is a plain release asset, so the telemetry headers the update service accepted are dropped
+  // rather than forwarded: an install identifier belongs to a service we run, not to a third-party file host.
+  const res = await net.fetch(url, { headers: { "User-Agent": `velaterm-electron-updater/${current}` } });
   if (res.status === 204) {
     pendingUpdate = null;
     return null;
@@ -884,7 +883,7 @@ async function downloadAndInstallUpdate(sender) {
 }
 
 function registerUpdaterIpc() {
-  ipcMain.handle("vlx:updater:check", (_e, headers) => checkForUpdate(headers));
+  ipcMain.handle("vlx:updater:check", () => checkForUpdate());
   ipcMain.handle("vlx:updater:downloadAndInstall", (event) => downloadAndInstallUpdate(event.sender));
   ipcMain.handle("vlx:updater:relaunch", () => {
     // The user asked for the restart, so it skips the quit confirmation.
