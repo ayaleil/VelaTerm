@@ -1159,6 +1159,7 @@ const vi: typeof en = {
   "tree.openProject": "Mở dự án",
   "tree.noAttention": "Không có phiên nào khớp bộ lọc trạng thái",
   "tree.noMatch": "Không tìm thấy kết quả",
+  "tree.otherProjects": "Dự án khác",
   "tree.groupName": "Tên nhóm",
   "tree.sessionNameAuto": "Tên phiên (để trống để đặt tự động)",
   "tree.editSession": "Sửa phiên",
