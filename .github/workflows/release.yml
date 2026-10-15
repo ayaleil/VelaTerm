@@ -65,9 +65,13 @@ jobs:
       # replaces: its executable is `velaterm`, not the `velaterm-electron` that electron-builder would derive
       # from the productName in electron-builder.yml. The data directories are unaffected either way — they
       # come from the package.json name and from serve_identifier in the Rust core, not from packaging.
+      # --publish never matters: electron-builder's default is onTagOrDraft, so on a tag in CI it tries to
+      # upload the artifact itself and fails demanding GH_TOKEN. Uploading is the publish job's work, which is
+      # the only job holding a write-scoped token; this job deliberately has none.
       - name: Package the AppImage
         run: |
           pnpm exec electron-builder --linux AppImage \
+            --publish never \
             -c.productName=VelaTerm \
             -c.linux.executableName=velaterm
 
