@@ -103,8 +103,10 @@ function renderTree() {
       setRenameVal={vi.fn()}
       commitRename={vi.fn()}
       cancelRename={vi.fn()}
+      renameError={null}
       onAddSession={vi.fn()}
       onAddGroup={vi.fn()}
+      onNewCollection={vi.fn()}
     />,
   );
 }

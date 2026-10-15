@@ -21,11 +21,16 @@ import { setLang } from "../../i18n";
 import { useTermStore } from "../../store/termStore";
 
 beforeEach(() => {
+  // Opening the Ports tab persists visuals, which resolves the OS colour scheme.
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   setLang("en");
   ports.state = { snapshot: null, unavailable: false, error: null };
   useTermStore.setState({ inspectorTab: "info", rightCollapsed: true });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it("stays hidden without forwards", () => {
   const { container } = render(<PortsSeg />);

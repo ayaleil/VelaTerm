@@ -32,7 +32,8 @@ afterEach(() => {
 
 it("scopes tabs to the project only after the Behavior toggle is switched on", async () => {
   await act(async () => render(<SettingsModal onClose={() => {}} />));
-  fireEvent.click(screen.getByRole("button", { name: "Behavior" }));
+  // dev renders the settings categories as navigable links, not buttons.
+  fireEvent.click(screen.getByRole("link", { name: "Behavior" }));
   const field = within(screen.getByText("Show only the active project's tabs").parentElement!);
   expect(useTermStore.getState().scopeTabsToProject).toBe(false);
   expect(screen.getByText(/Hidden tabs keep running/)).toBeTruthy();
