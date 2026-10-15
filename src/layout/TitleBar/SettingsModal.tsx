@@ -332,6 +332,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const setInputLatencyThresholdMs = useTermStore((s) => s.setInputLatencyThresholdMs);
   const dynamicStatusFilter = useTermStore((s) => s.dynamicStatusFilter);
   const setDynamicStatusFilter = useTermStore((s) => s.setDynamicStatusFilter);
+  const sortByActivity = useTermStore((s) => s.sortByActivity);
+  const setSortByActivity = useTermStore((s) => s.setSortByActivity);
   const recordSessions = useTermStore((s) => s.recordSessions);
   const setRecordSessions = useTermStore((s) => s.setRecordSessions);
   const maxLiveTabs = useTermStore((s) => s.maxLiveTabs);
@@ -743,6 +745,16 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         ["off", t("common.off")],
                       ]}
                       onChange={(v) => setDynamicStatusFilter(v === "on")}
+                    />
+                  </Field>
+                  <Field label={t("tree.sortByActivity")}>
+                    <Seg<"on" | "off">
+                      value={sortByActivity ? "on" : "off"}
+                      options={[
+                        ["on", t("common.on")],
+                        ["off", t("common.off")],
+                      ]}
+                      onChange={(v) => setSortByActivity(v === "on")}
                     />
                   </Field>
                   {singleTabMode && (

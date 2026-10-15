@@ -883,6 +883,8 @@ export function usePtySession(session: Session, cwd?: string, hidden?: boolean) 
       // xterm returns the viewport to the bottom on user input, so a previous scroll away no longer
       // holds; read the settled position once xterm has applied it.
       setTimeout(syncViewportIntent, 0);
+      // User input is sidebar activity; the store counts a typing burst once per second, not per key.
+      useTermStore.getState().noteSessionActivity(session.id);
       // Run on every native input: record symbols already sent before keyup as well as swallowing late
       // duplicates of punctuation sent by the WebKit fallback.
       if (imeFix?.shouldSwallow(data)) return;
