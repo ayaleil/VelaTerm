@@ -221,4 +221,7 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           gh release view "$tag" >/dev/null 2>&1 \
             || gh release create "$tag" --title "$tag" --notes "Fork build of $tag. The macOS bundle is unsigned."
-          gh release upload "$tag" artifacts/* --clobber
+          # Not artifacts/*: merge-multiple flattens the artifacts into one directory but keeps the folder
+          # structure inside each, so the Tauri bundles arrive under dmg/, macos/, nsis/ and msi/, and gh
+          # refuses a directory with "is a directory". Assets are uploaded by basename either way.
+          find artifacts -type f -print0 | xargs -0 gh release upload "$tag" --clobber
