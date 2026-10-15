@@ -124,6 +124,8 @@ export interface PersistedSettings {
   inspectorTab: InspectorTab;
   /** Single-tab mode reuses the current tab and keeps the previous tree alive in the background. */
   singleTabMode: boolean;
+  /** Tab bar shows only the active project's tabs plus global terminals. Off keeps every tab visible. */
+  scopeTabsToProject: boolean;
   /** Terminal renderer. DOM is stable; WebGL can hit context limits with many terminals. */
   termRenderer: TermRenderer;
   /** Advanced full redraw on tab return, off by default. Enable only to mitigate GPU artifacts or
@@ -218,6 +220,9 @@ export interface PersistedSettings {
   /** The revision of the default inline set that the saved list has been brought up to. A list saved
    * before a revision gains that revision's chips once; removing them again in the settings sticks. */
   composerInlineChipsRevision: number;
+  /** Sidebar order: on keeps the most recently active projects and sessions at the top, off renders the
+   * manual order. Off by default; the manual order is never changed by the mode. */
+  sortByActivity: boolean;
 }
 
 /** Every composer chip the toolbar can show, in the order the toolbar used before the list became
@@ -261,6 +266,7 @@ const SETTINGS_DEFAULTS: PersistedSettings = {
   navLayout: "tree",
   inspectorTab: "info",
   singleTabMode: true,
+  scopeTabsToProject: false,
   termRenderer: "dom",
   redrawOnReveal: false,
   outputScheduler: true,
@@ -298,6 +304,7 @@ const SETTINGS_DEFAULTS: PersistedSettings = {
   infoCollapsed: {},
   composerInlineChips: DEFAULT_COMPOSER_INLINE_CHIPS,
   composerInlineChipsRevision: COMPOSER_INLINE_CHIPS_REVISION,
+  sortByActivity: false,
 };
 
 /** Keeps only known chip ids, once each and in the saved order. A missing or malformed value falls back
@@ -392,6 +399,7 @@ export function loadSettings(): PersistedSettings {
     merged.referSummary = sanitizeReferSummary(parsed.referSummary);
     merged.composerInlineChips = sanitizeComposerInlineChips(parsed.composerInlineChips);
     merged.inputLatencyLog = merged.inputLatencyLog === true;
+    merged.scopeTabsToProject = merged.scopeTabsToProject === true;
     merged.inputLatencyThresholdMs = normalizeInputLatencyThreshold(merged.inputLatencyThresholdMs);
     // A list saved before revision 1 gains Tasks at the end. The bumped revision is written with the next
     // save, so switching Tasks off again afterwards is kept.
@@ -400,6 +408,8 @@ export function loadSettings(): PersistedSettings {
       merged.composerInlineChips = [...merged.composerInlineChips, "tasks"];
     }
     merged.composerInlineChipsRevision = COMPOSER_INLINE_CHIPS_REVISION;
+    // Only an explicit boolean true switches the activity order on; anything else keeps the manual order.
+    merged.sortByActivity = parsed.sortByActivity === true;
     // Migrate boolean gpuRender to termRenderer only when the new key is absent, preserving WebGL for
     // existing users. Future saves write only the new structure and naturally discard the old field.
     if (parsed.termRenderer === undefined && typeof parsed.gpuRender === "boolean") {

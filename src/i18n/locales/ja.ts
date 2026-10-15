@@ -532,6 +532,8 @@ const ja: typeof en = {
   "settings.maxLiveTabs": "Background limit", // Background limit
   "settings.defaultShell": "既定のシェル", // Default shell
   "settings.spawnConfirm": "Confirm before spawn", // Confirm before spawn
+  "settings.scopeTabsToProject": "アクティブなプロジェクトのタブのみ表示", // Show only the active project's tabs
+  "settings.scopeTabsToProjectHint": "サイドバーでプロジェクトを選択すると、そのプロジェクトのタブとグローバルターミナルのみが表示されます。非表示のタブは実行を続けます。", // Selecting a project in the sidebar shows only its tabs plus global terminals. Hidden tabs keep running.
   "settings.usageAuto": "Usage auto-refresh", // Usage auto-refresh
   "settings.usageRefresh": "Usage refresh", // Usage refresh
   "settings.autoContinue": "上限リセット後に自動再開", // Continue after limit resets
@@ -1136,6 +1138,9 @@ const ja: typeof en = {
   "tree.refreshStatusMatch": "ステータスを更新",
   "tree.filterStatusSection": "ステータス", // Status
   "tree.filterMarkSection": "マーク", // Mark
+  "tree.sortSection": "並び順", // Order
+  "tree.sortByActivity": "アクティビティ順に並べ替え", // Sort by activity
+  "tree.sortByActivityHint": "最近アクティブなプロジェクトとセッションを上に保ちます。オフにすると手動の並び順に戻ります。", // Keeps the most recently active projects and sessions at the top; off restores the manual order.
   "tree.viewMainName": "メイン",
   "tree.viewUntitled": "名称未設定ビュー",
   "tree.viewDefaultName": (n) => `ビュー ${n}`,
@@ -1170,6 +1175,7 @@ const ja: typeof en = {
   "tree.openProject": "プロジェクトを開く", // Open Project
   "tree.noAttention": "ステータス絞り込みに一致するセッションはありません", // No sessions match the status filter
   "tree.noMatch": "一致なし", // No matches
+  "tree.otherProjects": "その他のプロジェクト", // Other projects
 
   // Dialog fields
   "tree.groupName": "グループ名", // Group name
@@ -1354,6 +1360,8 @@ const ja: typeof en = {
   "center.splitHint": "セッションを開くと、次のショートカットで画面を分割できます：",
   "tab.unsavedDot": "未保存の変更あり", // Unsaved changes
   "tab.newTerminal": "新規ターミナル", // New terminal
+  "tab.newGlobalTerminal": "新規グローバルターミナル", // New global terminal
+  "tab.globalTerminal": "グローバルターミナル", // Global terminal
   "tab.newDocument": "新規ドキュメント", // New document
   "tab.bgTitle": (n) => `バックグラウンド常駐タブ: ${n} 件（プロセスは実行中）`, // Background keep-alive tabs: {n}…
   "tab.bgLabel": (n) => `バックグラウンド ${n}`, // Background {n}
@@ -2401,6 +2409,25 @@ const ja: typeof en = {
   "chat.antigravity.textOnly": "Antigravity の会話ビューは現在、テキストメッセージのみに対応しています。",
   "chat.antigravity.permissionsHint": "承認が必要なツールは、Antigravity の設定で事前に許可するか、ターミナルビューで使用してください。",
   "chat.antigravity.settingsHint": "モデル、推論の強度、権限はターンの合間に変更してください。",
+  "ports.title": "ポート", // Ports
+  "ports.active": "転送中", // Forwarded
+  "ports.activeEmpty": "転送中のポートはありません", // No forwarded ports
+  "ports.detected": "検出済み", // Detected
+  "ports.detectedEmpty": "待ち受け中のポートが見つかりません", // No listening ports found
+  "ports.detectionUnavailable": "このホストではポート検出を利用できません", // Port detection is not available on this host
+  "ports.manual": "ポートを転送", // Forward a port
+  "ports.portPlaceholder": "リモートポート", // Remote port
+  "ports.forward": "転送", // Forward
+  "ports.open": "ブラウザで開く", // Open in browser
+  "ports.stop": "停止", // Stop
+  "ports.localChanged": (port) => `ローカルポート ${port} は使用中のため、別のローカルポートを使用しています`, // Local port {port} was busy, so another local port is used
+  "ports.unavailable": "利用できません — VelaTerm を更新してください", // Unavailable — update VelaTerm
+  "ports.invalidPort": (port) => `無効なポート: ${port}`, // Invalid port: {port}
+  "ports.missingPort": "ポートを入力してください", // Enter a port
+  "ports.unknownAction": (action) => `不明な操作: ${action}`, // Unknown action: {action}
+  "ports.limit": (max) => `1 つの接続で転送できるポートは最大 ${max} 個です`, // At most {max} ports can be forwarded per connection
+  "ports.notForwarded": (port) => `ポート ${port} は転送されていません`, // Port {port} is not forwarded
+  "statusbar.ports": (n) => `${n} 個のポートを転送中`, // {n} forwarded ports
 };
 
 export default ja;

@@ -542,6 +542,8 @@ const ru: typeof en = {
   "settings.maxLiveTabs": "Background limit", // Background limit
   "settings.defaultShell": "Shell по умолчанию", // Default shell
   "settings.spawnConfirm": "Confirm before spawn", // Confirm before spawn
+  "settings.scopeTabsToProject": "Показывать только вкладки активного проекта", // Show only the active project's tabs
+  "settings.scopeTabsToProjectHint": "При выборе проекта на боковой панели отображаются только его вкладки и глобальные терминалы. Скрытые вкладки продолжают работать.", // Selecting a project in the sidebar shows only its tabs plus global terminals. Hidden tabs keep running.
   "settings.usageAuto": "Usage auto-refresh", // Usage auto-refresh
   "settings.usageRefresh": "Usage refresh", // Usage refresh
   "settings.autoContinue": "Продолжать после сброса лимита", // Continue after limit resets
@@ -1147,6 +1149,9 @@ const ru: typeof en = {
   "tree.refreshStatusMatch": "Обновить статус",
   "tree.filterStatusSection": "Статус", // Status
   "tree.filterMarkSection": "Метка", // Mark
+  "tree.sortSection": "Порядок", // Order
+  "tree.sortByActivity": "Сортировать по активности", // Sort by activity
+  "tree.sortByActivityHint": "Держит недавно активные проекты и сессии сверху; при выключении возвращается ручной порядок.", // Keeps the most recently active projects and sessions at the top; off restores the manual order.
   "tree.viewMainName": "Основной",
   "tree.viewUntitled": "Безымянное представление",
   "tree.viewDefaultName": (n) => `Представление ${n}`,
@@ -1181,6 +1186,7 @@ const ru: typeof en = {
   "tree.openProject": "Открыть проект", // Open Project
   "tree.noAttention": "Нет сессий, соответствующих фильтру статуса", // No sessions match the status filter
   "tree.noMatch": "Совпадений нет", // No matches
+  "tree.otherProjects": "Другие проекты", // Other projects
 
   // Dialog fields
   "tree.groupName": "Название группы", // Group name
@@ -1371,6 +1377,8 @@ const ru: typeof en = {
   "center.splitHint": "Откройте сессию, чтобы разделить окно с помощью этих сочетаний клавиш:",
   "tab.unsavedDot": "Несохранённые изменения", // Unsaved changes
   "tab.newTerminal": "Новый терминал", // New terminal
+  "tab.newGlobalTerminal": "Новый глобальный терминал", // New global terminal
+  "tab.globalTerminal": "Глобальный терминал", // Global terminal
   "tab.newDocument": "Новый документ", // New document
   "tab.bgTitle": (n) => `Фоновые вкладки: ${n} (процессы продолжают работать)`, // Background keep-alive tabs: {n}…
   "tab.bgLabel": (n) => `Фон ${n}`, // Background {n}
@@ -2424,6 +2432,25 @@ const ru: typeof en = {
   "chat.antigravity.textOnly": "В режиме диалога Antigravity пока поддерживаются только текстовые сообщения.",
   "chat.antigravity.permissionsHint": "Инструменты, требующие одобрения, необходимо заранее разрешить в настройках Antigravity или использовать в режиме терминала.",
   "chat.antigravity.settingsHint": "Изменяйте модель, уровень рассуждений или разрешения между ходами.",
+  "ports.title": "Порты", // Ports
+  "ports.active": "Перенаправленные", // Forwarded
+  "ports.activeEmpty": "Нет перенаправленных портов", // No forwarded ports
+  "ports.detected": "Обнаруженные", // Detected
+  "ports.detectedEmpty": "Прослушиваемые порты не найдены", // No listening ports found
+  "ports.detectionUnavailable": "Обнаружение портов недоступно на этом хосте", // Port detection is not available on this host
+  "ports.manual": "Перенаправить порт", // Forward a port
+  "ports.portPlaceholder": "Удалённый порт", // Remote port
+  "ports.forward": "Перенаправить", // Forward
+  "ports.open": "Открыть в браузере", // Open in browser
+  "ports.stop": "Остановить", // Stop
+  "ports.localChanged": (port) => `Локальный порт ${port} был занят, поэтому используется другой локальный порт`, // Local port {port} was busy, so another local port is used
+  "ports.unavailable": "Недоступно — обновите VelaTerm", // Unavailable — update VelaTerm
+  "ports.invalidPort": (port) => `Недопустимый порт: ${port}`, // Invalid port: {port}
+  "ports.missingPort": "Введите порт", // Enter a port
+  "ports.unknownAction": (action) => `Неизвестное действие: ${action}`, // Unknown action: {action}
+  "ports.limit": (max) => `Для одного подключения можно перенаправить не более ${max} портов`, // At most {max} ports can be forwarded per connection
+  "ports.notForwarded": (port) => `Порт ${port} не перенаправлен`, // Port {port} is not forwarded
+  "statusbar.ports": (n) => `Перенаправлено портов: ${n}`, // {n} forwarded ports
 };
 
 export default ru;

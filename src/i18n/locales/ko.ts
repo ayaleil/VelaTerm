@@ -532,6 +532,8 @@ const ko: typeof en = {
   "settings.maxLiveTabs": "Background limit", // Background limit
   "settings.defaultShell": "기본 셸", // Default shell
   "settings.spawnConfirm": "Confirm before spawn", // Confirm before spawn
+  "settings.scopeTabsToProject": "활성 프로젝트의 탭만 표시", // Show only the active project's tabs
+  "settings.scopeTabsToProjectHint": "사이드바에서 프로젝트를 선택하면 해당 프로젝트의 탭과 전역 터미널만 표시됩니다. 숨겨진 탭은 계속 실행됩니다.", // Selecting a project in the sidebar shows only its tabs plus global terminals. Hidden tabs keep running.
   "settings.usageAuto": "Usage auto-refresh", // Usage auto-refresh
   "settings.usageRefresh": "Usage refresh", // Usage refresh
   "settings.autoContinue": "한도 초기화 후 자동으로 계속", // Continue after limit resets
@@ -1131,6 +1133,9 @@ const ko: typeof en = {
   "tree.refreshStatusMatch": "상태 새로 고침",
   "tree.filterStatusSection": "상태", // Status
   "tree.filterMarkSection": "표시", // Mark
+  "tree.sortSection": "정렬", // Order
+  "tree.sortByActivity": "활동순으로 정렬", // Sort by activity
+  "tree.sortByActivityHint": "최근에 활동한 프로젝트와 세션을 위에 유지합니다. 끄면 수동 순서로 돌아갑니다.", // Keeps the most recently active projects and sessions at the top; off restores the manual order.
   "tree.viewMainName": "기본",
   "tree.viewUntitled": "이름 없는 보기",
   "tree.viewDefaultName": (n) => `보기 ${n}`,
@@ -1163,6 +1168,7 @@ const ko: typeof en = {
   "tree.openProject": "프로젝트 열기", // Open Project
   "tree.noAttention": "상태 필터와 일치하는 세션이 없습니다", // No sessions match the status filter
   "tree.noMatch": "일치 항목 없음", // No matches
+  "tree.otherProjects": "기타 프로젝트", // Other projects
 
   // Dialog fields
   "tree.groupName": "그룹 이름", // Group name
@@ -1346,6 +1352,8 @@ const ko: typeof en = {
   "center.splitHint": "세션을 연 후 다음 단축키로 화면을 분할할 수 있습니다:",
   "tab.unsavedDot": "저장되지 않은 변경", // Unsaved changes
   "tab.newTerminal": "새 터미널", // New terminal
+  "tab.newGlobalTerminal": "새 전역 터미널", // New global terminal
+  "tab.globalTerminal": "전역 터미널", // Global terminal
   "tab.newDocument": "새 문서", // New document
   "tab.bgTitle": (n) => `백그라운드 유지 탭: ${n}개 (프로세스 실행 중)`, // Background keep-alive tabs: {n}…
   "tab.bgLabel": (n) => `백그라운드 ${n}`, // Background {n}
@@ -2384,6 +2392,25 @@ const ko: typeof en = {
   "chat.antigravity.textOnly": "Antigravity 대화 보기는 현재 텍스트 메시지만 지원합니다.",
   "chat.antigravity.permissionsHint": "승인이 필요한 도구는 Antigravity 설정에서 미리 허용하거나 터미널 보기에서 사용해야 합니다.",
   "chat.antigravity.settingsHint": "모델, 추론 강도 또는 권한은 턴 사이에 변경하세요.",
+  "ports.title": "포트", // Ports
+  "ports.active": "전달됨", // Forwarded
+  "ports.activeEmpty": "전달된 포트가 없습니다", // No forwarded ports
+  "ports.detected": "감지됨", // Detected
+  "ports.detectedEmpty": "수신 대기 중인 포트가 없습니다", // No listening ports found
+  "ports.detectionUnavailable": "이 호스트에서는 포트 감지를 사용할 수 없습니다", // Port detection is not available on this host
+  "ports.manual": "포트 전달", // Forward a port
+  "ports.portPlaceholder": "원격 포트", // Remote port
+  "ports.forward": "전달", // Forward
+  "ports.open": "브라우저에서 열기", // Open in browser
+  "ports.stop": "중지", // Stop
+  "ports.localChanged": (port) => `로컬 포트 ${port}이(가) 사용 중이어서 다른 로컬 포트를 사용합니다`, // Local port {port} was busy, so another local port is used
+  "ports.unavailable": "사용할 수 없음 — VelaTerm을 업데이트하세요", // Unavailable — update VelaTerm
+  "ports.invalidPort": (port) => `잘못된 포트: ${port}`, // Invalid port: {port}
+  "ports.missingPort": "포트를 입력하세요", // Enter a port
+  "ports.unknownAction": (action) => `알 수 없는 작업: ${action}`, // Unknown action: {action}
+  "ports.limit": (max) => `연결당 최대 ${max}개의 포트를 전달할 수 있습니다`, // At most {max} ports can be forwarded per connection
+  "ports.notForwarded": (port) => `포트 ${port}은(는) 전달되지 않았습니다`, // Port {port} is not forwarded
+  "statusbar.ports": (n) => `전달된 포트 ${n}개`, // {n} forwarded ports
 };
 
 export default ko;

@@ -529,6 +529,8 @@ const zhTW: typeof en = {
   "settings.maxLiveTabs": "背景保活上限", // Background limit
   "settings.defaultShell": "預設 Shell", // Default shell
   "settings.spawnConfirm": "派生前確認", // Confirm before spawn
+  "settings.scopeTabsToProject": "僅顯示目前專案的分頁", // Show only the active project's tabs
+  "settings.scopeTabsToProjectHint": "在側邊欄選取專案後，只會顯示該專案的分頁與全域終端機。隱藏的分頁會繼續執行。", // Selecting a project in the sidebar shows only its tabs plus global terminals. Hidden tabs keep running.
   "settings.usageAuto": "額度自動刷新", // Usage auto-refresh
   "settings.usageRefresh": "額度刷新", // Usage refresh
   "settings.autoContinue": "額度重設後自動繼續", // Continue after limit resets
@@ -1119,6 +1121,9 @@ const zhTW: typeof en = {
   "tree.refreshStatusMatch": "重新整理狀態",
   "tree.filterStatusSection": "狀態", // Status
   "tree.filterMarkSection": "標記", // Mark
+  "tree.sortSection": "排序", // Order
+  "tree.sortByActivity": "按活動排序", // Sort by activity
+  "tree.sortByActivityHint": "將最近活躍的專案和會話保持在頂端；關閉後恢復手動排序。", // Keeps the most recently active projects and sessions at the top; off restores the manual order.
   "tree.viewMainName": "主分身",
   "tree.viewUntitled": "未命名分身",
   "tree.viewDefaultName": (n) => `分身 ${n}`,
@@ -1151,6 +1156,7 @@ const zhTW: typeof en = {
   "tree.openProject": "開啟專案", // Open Project
   "tree.noAttention": "沒有符合狀態篩選的會話", // No sessions match the status filter
   "tree.noMatch": "無符合結果", // No matches
+  "tree.otherProjects": "其他專案", // Other projects
 
   // Dialog fields
   "tree.groupName": "群組名稱", // Group name
@@ -1329,6 +1335,8 @@ const zhTW: typeof en = {
   "center.splitHint": "開啟會話後，可使用以下快捷鍵分割畫面：",
   "tab.unsavedDot": "有未儲存的修改", // Unsaved changes
   "tab.newTerminal": "新增終端機", // New terminal
+  "tab.newGlobalTerminal": "新增全域終端機", // New global terminal
+  "tab.globalTerminal": "全域終端機", // Global terminal
   "tab.newDocument": "新增文件", // New document
   "tab.bgTitle": (n) => `背景保活分頁：${n} 個（處理程序仍在執行）`, // Background keep-alive tabs: {n}…
   "tab.bgLabel": (n) => `背景 ${n}`, // Background {n}
@@ -2352,6 +2360,25 @@ const zhTW: typeof en = {
   "chat.antigravity.textOnly": "Antigravity 會話檢視目前僅支援文字訊息。",
   "chat.antigravity.permissionsHint": "需要核准的工具必須先在 Antigravity 設定中獲准使用，或在終端機檢視中使用。",
   "chat.antigravity.settingsHint": "請在回合之間變更模型、思考程度或權限。",
+  "ports.title": "連接埠", // Ports
+  "ports.active": "已轉送", // Forwarded
+  "ports.activeEmpty": "沒有已轉送的連接埠", // No forwarded ports
+  "ports.detected": "已偵測", // Detected
+  "ports.detectedEmpty": "找不到正在監聽的連接埠", // No listening ports found
+  "ports.detectionUnavailable": "此主機不支援連接埠偵測", // Port detection is not available on this host
+  "ports.manual": "轉送連接埠", // Forward a port
+  "ports.portPlaceholder": "遠端連接埠", // Remote port
+  "ports.forward": "轉送", // Forward
+  "ports.open": "在瀏覽器中開啟", // Open in browser
+  "ports.stop": "停止", // Stop
+  "ports.localChanged": (port) => `本機連接埠 ${port} 已被占用，已改用其他本機連接埠`, // Local port {port} was busy, so another local port is used
+  "ports.unavailable": "無法使用 — 請更新 VelaTerm", // Unavailable — update VelaTerm
+  "ports.invalidPort": (port) => `無效的連接埠：${port}`, // Invalid port: {port}
+  "ports.missingPort": "請輸入連接埠", // Enter a port
+  "ports.unknownAction": (action) => `未知的操作：${action}`, // Unknown action: {action}
+  "ports.limit": (max) => `每個連線最多可轉送 ${max} 個連接埠`, // At most {max} ports can be forwarded per connection
+  "ports.notForwarded": (port) => `連接埠 ${port} 尚未轉送`, // Port {port} is not forwarded
+  "statusbar.ports": (n) => `已轉送 ${n} 個連接埠`, // {n} forwarded ports
 };
 
 export default zhTW;

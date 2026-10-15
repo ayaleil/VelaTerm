@@ -528,6 +528,8 @@ const zhCN: typeof en = {
   "settings.maxLiveTabs": "后台保活上限",
   "settings.defaultShell": "默认 Shell",
   "settings.spawnConfirm": "派生前确认",
+  "settings.scopeTabsToProject": "仅显示当前项目的标签页",
+  "settings.scopeTabsToProjectHint": "在侧边栏中选择项目后，只显示该项目的标签页和全局终端。隐藏的标签页会继续运行。",
   "settings.usageAuto": "额度自动刷新",
   "settings.usageRefresh": "额度刷新",
   "settings.autoContinue": "额度重置后自动继续",
@@ -1118,6 +1120,9 @@ const zhCN: typeof en = {
   "tree.refreshStatusMatch": "刷新状态",
   "tree.filterStatusSection": "状态",
   "tree.filterMarkSection": "标记",
+  "tree.sortSection": "排序",
+  "tree.sortByActivity": "按活动排序",
+  "tree.sortByActivityHint": "将最近活跃的项目和会话保持在顶部；关闭后恢复手动排序。",
   "tree.viewMainName": "主分身",
   "tree.viewUntitled": "未命名分身",
   "tree.viewDefaultName": (n) => `分身 ${n}`,
@@ -1150,6 +1155,7 @@ const zhCN: typeof en = {
   "tree.openProject": "打开项目",
   "tree.noAttention": "没有符合状态筛选的会话",
   "tree.noMatch": "无匹配结果",
+  "tree.otherProjects": "其他项目",
 
   // Dialog fields
   "tree.groupName": "分组名称",
@@ -1328,6 +1334,8 @@ const zhCN: typeof en = {
   "center.splitHint": "打开会话后，可使用以下快捷键分屏：",
   "tab.unsavedDot": "有未保存修改",
   "tab.newTerminal": "新建终端",
+  "tab.newGlobalTerminal": "新建全局终端",
+  "tab.globalTerminal": "全局终端",
   "tab.newDocument": "新建文档",
   "tab.bgTitle": (n) => `后台保活标签：${n} 个（进程仍在运行）`,
   "tab.bgLabel": (n) => `后台 ${n}`,
@@ -2351,6 +2359,25 @@ const zhCN: typeof en = {
   "chat.antigravity.textOnly": "Antigravity 会话视图目前仅支持文本消息。",
   "chat.antigravity.permissionsHint": "需要批准的工具必须先在 Antigravity 设置中获准使用，或在终端视图中使用。",
   "chat.antigravity.settingsHint": "请在回合之间修改模型、推理强度或权限。",
+  "ports.title": "端口", // Ports
+  "ports.active": "已转发", // Forwarded
+  "ports.activeEmpty": "没有已转发的端口", // No forwarded ports
+  "ports.detected": "已检测", // Detected
+  "ports.detectedEmpty": "未发现监听中的端口", // No listening ports found
+  "ports.detectionUnavailable": "此主机不支持端口检测", // Port detection is not available on this host
+  "ports.manual": "转发端口", // Forward a port
+  "ports.portPlaceholder": "远程端口", // Remote port
+  "ports.forward": "转发", // Forward
+  "ports.open": "在浏览器中打开", // Open in browser
+  "ports.stop": "停止", // Stop
+  "ports.localChanged": (port) => `本地端口 ${port} 已被占用，已改用其他本地端口`, // Local port {port} was busy, so another local port is used
+  "ports.unavailable": "不可用 — 请更新 VelaTerm", // Unavailable — update VelaTerm
+  "ports.invalidPort": (port) => `无效的端口：${port}`, // Invalid port: {port}
+  "ports.missingPort": "请输入端口", // Enter a port
+  "ports.unknownAction": (action) => `未知操作：${action}`, // Unknown action: {action}
+  "ports.limit": (max) => `每个连接最多可转发 ${max} 个端口`, // At most {max} ports can be forwarded per connection
+  "ports.notForwarded": (port) => `端口 ${port} 未被转发`, // Port {port} is not forwarded
+  "statusbar.ports": (n) => `已转发 ${n} 个端口`, // {n} forwarded ports
 };
 
 export default zhCN;

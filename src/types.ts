@@ -180,12 +180,17 @@ export interface Session {
   worktreeBaseRef?: string | null;
   /** Archive timestamp in seconds, or empty when active. Archiving hides the session from the normal tree for read-only replay and is reversible. */
   archivedAt?: number | null;
+  /** Last recorded activity in milliseconds, or empty when never active. This is the persisted seed the tree
+   *  snapshot carries; the live copy the sidebar orders by is `sessionActivity` in the store. */
+  lastActiveAt?: number | null;
   /** Last URL visited by a browser node (kind=browser); empty for other kinds (architecture document §17). */
   browserUrl?: string | null;
   /** Optional user-chosen emoji marker such as `🔥`, rendered before the node name in the sidebar and usable as a
    *  sidebar filter. The stored value is the emoji itself, so markers unknown to this build still round-trip.
    *  Empty or absent means unmarked. */
   mark?: string | null;
+  /** Ephemeral terminal that belongs to no project and shows in every project's tab bar. Never persisted. */
+  global?: boolean;
   sortOrder: number;
   createdAt: number;
 }

@@ -34,6 +34,8 @@ import { arrangeProjectsInCollections } from "./projectCollectionLayout";
 import { collectionDialogUrl } from "./collectionNavigation";
 import { newGroupDialogUrl } from "./groupNavigation";
 import { hasProjectDrag, PROJECT_DRAG_MIME, resolveProjectDrop } from "./projectCollectionDrop";
+import { hiddenSearchMatches } from "./hiddenSearchMatches";
+import { isDropZoneAllowed, orderTreeByActivity } from "./activityOrder";
 
 /** Reference to a node targeted by a context menu or operation. */
 export interface TreeNodeRef {
@@ -80,6 +82,7 @@ export interface TreeHandlers {
  *  visible rows and reuses nodes while scrolling. This is separate from `flat`, which contains only persistent nodes
  *  for Shift-range selection. */
 type TreeRow =
+  | { kind: "section"; id: string }
   | { kind: "project"; id: string; project: Project; expanded: boolean; indent: number }
   | { kind: "group"; id: string; group: Group; depth: number; expanded: boolean }
   | {
@@ -294,8 +297,7 @@ export function ProjectTree(h: TreeHandlers) {
     isPrimary,
   } = h;
 
-  const storeProjects = useTermStore((s) => s.projects);
-  const projects = useMemo(() => collectionsFirst(storeProjects), [storeProjects]);
+  const rawProjects = useTermStore((s) => s.projects);
   const treeLoaded = useTermStore((s) => s.treeLoaded);
   // Delay the loading row so a fast load stays blank instead of flashing a spinner for one frame.
   const [showLoadingHint, setShowLoadingHint] = useState(false);
@@ -310,8 +312,21 @@ export function ProjectTree(h: TreeHandlers) {
   // Format the user override or default Open Project shortcut for the empty-state hint.
   const openProjectCombo =
     useTermStore((s) => s.shortcutOverrides.openProject) || DEFAULT_BINDINGS.openProject;
-  const groups = useTermStore((s) => s.groups);
-  const sessions = useTermStore((s) => s.sessions);
+  const rawGroups = useTermStore((s) => s.groups);
+  const rawSessions = useTermStore((s) => s.sessions);
+  const sortByActivity = useTermStore((s) => s.sortByActivity);
+  // Subscribe to the live activity map only while the mode is on, so recording activity costs no rerender
+  // in the manual order.
+  const sessionActivity = useTermStore((s) => (s.sortByActivity ? s.sessionActivity : null));
+  // With the mode off the store arrays keep their manual order exactly as delivered. In either order collections
+  // stay above folder-backed projects, each kind keeping the order computed here.
+  const { projects, groups, sessions } = useMemo(() => {
+    const tree =
+      sortByActivity && sessionActivity
+        ? orderTreeByActivity(rawProjects, rawGroups, rawSessions, sessionActivity)
+        : { projects: rawProjects, groups: rawGroups, sessions: rawSessions };
+    return { ...tree, projects: collectionsFirst(tree.projects) };
+  }, [sortByActivity, sessionActivity, rawProjects, rawGroups, rawSessions]);
   const ephemeralSessions = useTermStore((s) => s.ephemeralSessions);
   const toggleCollapsed = useTermStore((s) => s.toggleCollapsed);
   const openSession = useTermStore((s) => s.openSession);
@@ -337,6 +352,7 @@ export function ProjectTree(h: TreeHandlers) {
   const toggleSelect = useTermStore((s) => s.toggleSelect);
   const setSelection = useTermStore((s) => s.setSelection);
   const setInspectTarget = useTermStore((s) => s.setInspectTarget);
+  const setActiveProject = useTermStore((s) => s.setActiveProject);
 
   type DragZone = "top" | "center" | "bottom";
   interface DragTarget { id: string; zone: DragZone }
@@ -491,6 +507,13 @@ export function ProjectTree(h: TreeHandlers) {
     return arrangeProjectsInCollections(visible, p => filtering || !nodeCollapsed(p.id, p.collapsed));
   }, [projects, filtering, visProjects, collapsedOverrides]);
 
+  // A status filter hides projects without qualifying sessions; searching still lists them, flat and
+  // collapsed, below the filtered results so they stay reachable.
+  const otherProjects = useMemo(
+    () => hiddenSearchMatches(projects, filter, visProjects, statusFiltering),
+    [projects, filter, visProjects, statusFiltering],
+  );
+
   // A name match propagates visibility downward so a matching node's complete subtree remains expandable even when
   // descendants lack the term. Marker propagation is added only for projects/groups below: a marked session keeps
   // its ancestor chain visible, but must not pull unrelated descendants into the marker result.
@@ -564,11 +587,12 @@ export function ProjectTree(h: TreeHandlers) {
       const expanded = filtering ? true : !nodeCollapsed(p.id, p.collapsed);
       if (expanded) walk(p.id, null, projectContainerHit(p));
     }
+    for (const p of otherProjects) out.push({ id: p.id, kind: "project" });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     projects, groups, sessions, filter, statusFiltering, statusFilterIds, markFilter,
-    visGroups, visProjects, collapsedOverrides, projectEntries,
+    visGroups, visProjects, collapsedOverrides, projectEntries, otherProjects,
   ]);
 
   // Flatten the visible tree, including pinned temporary draft types, into virtualized render rows matching the old
@@ -627,11 +651,17 @@ export function ProjectTree(h: TreeHandlers) {
       out.push({ kind: "project", id: p.id, project: p, expanded, indent: entry.indent });
       if (expanded) walkChildren(p.id, null, 1 + entry.indent, projectContainerHit(p));
     }
+    if (otherProjects.length > 0) {
+      out.push({ kind: "section", id: "section:other-projects" });
+      for (const p of otherProjects) {
+        out.push({ kind: "project", id: p.id, project: p, expanded: false, indent: 0 });
+      }
+    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     projects, groups, sessions, filter, statusFiltering, statusFilterIds, markFilter,
-    visGroups, visProjects, filtering, collapsedOverrides, projectEntries,
+    visGroups, visProjects, filtering, collapsedOverrides, projectEntries, otherProjects,
   ]);
 
   // Exact row heights are compact 24, regular 28, or comfy 32, reduced by 3 in compact navigation. Supplying this
@@ -840,6 +870,15 @@ export function ProjectTree(h: TreeHandlers) {
       return;
     }
     selectSingle(node);
+    const projectId =
+      node.kind === "project"
+        ? projects.find((p) => p.id === node.id)?.rootPath
+          ? node.id
+          : undefined
+        : node.kind === "group"
+          ? groupsById.get(node.id)?.projectId
+          : sessionsById.get(node.id)?.projectId;
+    if (projectId) setActiveProject(projectId);
     if (isSession) {
       // Selecting a session clears project/group inspection so the right pane follows the active session again.
       setInspectTarget(null);
@@ -970,10 +1009,19 @@ export function ProjectTree(h: TreeHandlers) {
   };
   const allowDrop = (e: React.DragEvent, id: string, hasCenter: boolean) => {
     if (hasProjectDrag(e.dataTransfer.types)) return;
+    const zone = calcZone(e, hasCenter);
+    if (!isDropZoneAllowed(zone, sortByActivity)) {
+      // Edge zones reorder siblings, which the activity order would hide. Without preventDefault the browser
+      // refuses the drop and shows it, so a reorder never appears to silently do nothing. Center drops that
+      // move a node into a group, project or under a session stay allowed.
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "none";
+      setDragOver((prev) => (prev?.id === id ? null : prev));
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
-    const zone = calcZone(e, hasCenter);
     setDragOver((prev) =>
       prev?.id === id && prev.zone === zone ? prev : { id, zone },
     );
@@ -1249,6 +1297,8 @@ export function ProjectTree(h: TreeHandlers) {
   // Render one flattened row by kind, centralizing JSX formerly spread across three recursive render paths.
   const renderRow = (row: TreeRow): React.ReactNode => {
     switch (row.kind) {
+      case "section":
+        return <div className="tree-section">{t("tree.otherProjects")}</div>;
       case "project": {
         const p = row.project;
         const renaming = renamingId === p.id;

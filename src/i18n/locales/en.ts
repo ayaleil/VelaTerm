@@ -531,6 +531,8 @@ const en = {
   "settings.maxLiveTabs": "Background limit",
   "settings.defaultShell": "Default shell",
   "settings.spawnConfirm": "Confirm before spawn",
+  "settings.scopeTabsToProject": "Show only the active project's tabs",
+  "settings.scopeTabsToProjectHint": "Selecting a project in the sidebar shows only its tabs plus global terminals. Hidden tabs keep running.",
   "settings.usageAuto": "Usage auto-refresh",
   "settings.usageRefresh": "Usage refresh",
   "settings.autoContinue": "Continue after limit resets",
@@ -1134,6 +1136,9 @@ const en = {
   "tree.refreshStatusMatch": "Refresh Status",
   "tree.filterStatusSection": "Status",
   "tree.filterMarkSection": "Mark",
+  "tree.sortSection": "Order",
+  "tree.sortByActivity": "Sort by activity",
+  "tree.sortByActivityHint": "Keeps the most recently active projects and sessions at the top; off restores the manual order.",
   "tree.viewMainName": "Main",
   "tree.viewUntitled": "Untitled view",
   "tree.viewDefaultName": (n: number) => `View ${n}`,
@@ -1168,6 +1173,7 @@ const en = {
   "tree.openProject": "Open Project",
   "tree.noAttention": "No sessions match the status filter",
   "tree.noMatch": "No matches",
+  "tree.otherProjects": "Other projects",
 
   // Dialog fields
   "tree.groupName": "Group name",
@@ -1357,6 +1363,8 @@ const en = {
   "center.splitHint": "Open a session to use these split shortcuts:",
   "tab.unsavedDot": "Unsaved changes",
   "tab.newTerminal": "New terminal",
+  "tab.newGlobalTerminal": "New global terminal",
+  "tab.globalTerminal": "Global terminal",
   "tab.newDocument": "New document",
   "tab.bgTitle": (n: number) =>
     `Background keep-alive tabs: ${n} (processes still running)`,
@@ -2412,6 +2420,26 @@ const en = {
   "chat.antigravity.textOnly": "Antigravity conversation view currently supports text messages only.",
   "chat.antigravity.permissionsHint": "Tools that require approval must be allowed in Antigravity settings or used in terminal view.",
   "chat.antigravity.settingsHint": "Change the model, reasoning effort, or permissions between turns.",
+  "ports.title": "Ports",
+  "ports.active": "Forwarded",
+  "ports.activeEmpty": "No forwarded ports",
+  "ports.detected": "Detected",
+  "ports.detectedEmpty": "No listening ports found",
+  "ports.detectionUnavailable": "Port detection is not available on this host",
+  "ports.manual": "Forward a port",
+  "ports.portPlaceholder": "Remote port",
+  "ports.forward": "Forward",
+  "ports.open": "Open in browser",
+  "ports.stop": "Stop",
+  "ports.localChanged": (port: number) =>
+    `Local port ${port} was busy, so another local port is used`,
+  "ports.unavailable": "Unavailable — update VelaTerm",
+  "ports.invalidPort": (port: string) => `Invalid port: ${port}`,
+  "ports.missingPort": "Enter a port",
+  "ports.unknownAction": (action: string) => `Unknown action: ${action}`,
+  "ports.limit": (max: string) => `At most ${max} ports can be forwarded per connection`,
+  "ports.notForwarded": (port: string) => `Port ${port} is not forwarded`,
+  "statusbar.ports": (n: number) => (n === 1 ? "1 forwarded port" : `${n} forwarded ports`),
 };
 
 export default en;

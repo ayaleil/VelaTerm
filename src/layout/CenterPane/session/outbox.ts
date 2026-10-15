@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { genId } from "../../../genId";
 import { chatSend, resolveChatImage, type ChatImage, type ChatImageValue, type SendBehavior, type ChatRow } from "../../../ipc/chat";
 import { cancelTranslation, prepareTranslation, sendTranslation } from "../../../ipc/translation";
+import { useTermStore } from "../../../store/termStore";
 
 export interface Submission {
   id: string;
@@ -45,6 +46,9 @@ export function unconfirmedSubmissionRows(rows: readonly ChatRow[], queued: read
 export function createSubmission(session: string, text: string, images: ChatImage[], behavior: SendBehavior, translation = false): Submission {
   const item: Submission = { id: `msg-${genId()}`, text, images, behavior, status: translation ? "translating" : "sending", translation };
   change(session, items => [...items, item]);
+  // Composing a message is the user's action, and so is the retry button, which re-creates a failed submission
+  // here; automatic redelivery of an uncertain send goes through deliverSubmission only.
+  useTermStore.getState().noteSessionActivity(session);
   return item;
 }
 

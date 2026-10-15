@@ -241,3 +241,55 @@ describe("composer inline chips", () => {
     expect(useTermStore.getState().composerInlineChips).toEqual(["permission", "model", "mcp"]);
   });
 });
+
+describe("project-scoped tabs preference", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("is off by default", () => {
+    expect(loadSettings().scopeTabsToProject).toBe(false);
+  });
+
+  it("keeps a saved choice and rejects non-boolean values", () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ scopeTabsToProject: true }));
+    expect(loadSettings().scopeTabsToProject).toBe(true);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ scopeTabsToProject: "yes" }));
+    expect(loadSettings().scopeTabsToProject).toBe(false);
+  });
+
+  it("persists the store setter", () => {
+    const before = useTermStore.getState().scopeTabsToProject;
+    try {
+      useTermStore.getState().setScopeTabsToProject(true);
+      expect(useTermStore.getState().scopeTabsToProject).toBe(true);
+      expect(JSON.parse(localStorage.getItem(SETTINGS_KEY)!).scopeTabsToProject).toBe(true);
+    } finally {
+      useTermStore.setState({ scopeTabsToProject: before });
+    }
+  });
+});
+
+describe("sortByActivity", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("is off by default and only an explicit boolean true switches it on", () => {
+    expect(loadSettings().sortByActivity).toBe(false);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sortByActivity: "true" }));
+    expect(loadSettings().sortByActivity).toBe(false);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sortByActivity: 1 }));
+    expect(loadSettings().sortByActivity).toBe(false);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sortByActivity: true }));
+    expect(loadSettings().sortByActivity).toBe(true);
+  });
+
+  it("round-trips through the store setter and the cache hydration", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    useTermStore.getState().setSortByActivity(true);
+    // Proves the field is part of the explicit persist list, not just of the state.
+    expect(loadSettings().sortByActivity).toBe(true);
+    useTermStore.setState({ sortByActivity: false });
+    useTermStore.getState().hydrateSettingsFromCache();
+    expect(useTermStore.getState().sortByActivity).toBe(true);
+    useTermStore.getState().setSortByActivity(false);
+    expect(loadSettings().sortByActivity).toBe(false);
+  });
+});

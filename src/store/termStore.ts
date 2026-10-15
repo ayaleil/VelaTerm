@@ -31,6 +31,7 @@ import {
 import type { BackgroundRun } from "../ipc/runs";
 import { pushSetting } from "../ipc/settingsSync";
 import { isTauri } from "../ipc/transport";
+import { isShareSurface } from "../ipc/shareBase";
 import { env } from "../platform";
 import { genId } from "../genId";
 import type { SpawnRequest, StatusSignal } from "../ipc/events";
@@ -127,6 +128,14 @@ import {
 } from "./settings";
 import { docKindOf, makeDocTab, type DocTab } from "./docTab";
 import { traceSplit, type SplitSource } from "./splitTrace";
+import {
+  nextVisibleTab,
+  projectShowing,
+  sessionProjectId,
+  tabProjectId,
+  visibleTabIds,
+  type TabScopeState,
+} from "./visibleTabs";
 
 // Re-export the public API after moving implementations to settings/docTab, preserving existing import paths.
 export { DEFAULT_MAX_LIVE_TABS } from "./settings";
@@ -615,6 +624,10 @@ function buildLayout(keepEphemeral: boolean): PersistedLayout {
 
 /** Debounces routine layout writes to local storage. */
 let saveLayoutTimer: ReturnType<typeof setTimeout> | undefined;
+function scopedActiveProject(state: Parameters<typeof projectShowing>[0] & { activeTabId: string | null }): string | null {
+  return env.isRemoteWindow ? null : projectShowing(state, state.activeTabId);
+}
+
 function saveLayoutTick() {
   clearTimeout(saveLayoutTimer);
   saveLayoutTimer = setTimeout(() => {
@@ -649,6 +662,36 @@ function locate(
   return null;
 }
 
+/** Active-tab fields for showing `tabId`, or the empty state for `null`. */
+function activateTab(state: Pick<TermStore, "paneTrees" | "lastActiveSessionTabId">, tabId: string | null) {
+  const tree = tabId ? state.paneTrees[tabId] : undefined;
+  const leaf = tree ? firstLeaf(tree) : null;
+  return {
+    activeTabId: tabId,
+    activeSessionId: leaf?.sessionId ?? null,
+    focusedPaneId: leaf?.paneId ?? null,
+    lastActiveSessionTabId: tree ? tabId : state.lastActiveSessionTabId,
+  };
+}
+
+/** Project whose tabs will show `sessionId` once opened, or `null` when it shows in every project. */
+function projectOpening(state: TermStore, sessionId: string): string | null {
+  const holder =
+    locate(state.paneTrees, state.openTabs, sessionId) ?? locate(state.paneTrees, state.liveTabs, sessionId);
+  if (holder) return tabProjectId(state, holder.tabId);
+  const session = state.sessions.find((s) => s.id === sessionId) ?? state.ephemeralSessions[sessionId];
+  return session ? sessionProjectId(state, session) : null;
+}
+
+function retargetReuseAnchor(
+  scope: TabScopeState,
+  activeTabId: string | null,
+  paneTrees: Record<string, PaneNode>,
+): string | null {
+  if (activeTabId && paneTrees[activeTabId]) return activeTabId;
+  return visibleTabIds(scope).find((t) => paneTrees[t]) ?? null;
+}
+
 /** Prunes pane leaves absent from `valid`; returns `null` when the whole tree becomes empty. */
 function pruneTree(
   tree: PaneNode | null | undefined,
@@ -679,6 +722,9 @@ function reconcileTabs(state: {
   docTabs: Record<string, DocTab>;
   browserTabs: Record<string, BrowserTab>;
   taskTabs: Record<string, TaskTab>;
+  scopeTabsToProject?: boolean;
+  activeProjectId?: string | null;
+  projects?: readonly { id: string }[];
 }) {
   const valid = new Set([
     ...state.sessions.map((s) => s.id),
@@ -722,7 +768,17 @@ function reconcileTabs(state: {
   }
   let { activeTabId, activeSessionId, focusedPaneId } = state;
   if (!activeTabId || !openTabs.includes(activeTabId)) {
-    activeTabId = openTabs[0] ?? null;
+    activeTabId =
+      visibleTabIds({
+        scopeTabsToProject: state.scopeTabsToProject ?? false,
+        activeProjectId: state.activeProjectId ?? null,
+        projects: state.projects ?? [],
+        sessions: state.sessions,
+        ephemeralSessions: state.ephemeralSessions,
+        openTabs,
+        paneTrees,
+        taskTabs,
+      })[0] ?? null;
   }
   if (activeTabId && (docTabs[activeTabId] || browserTabs[activeTabId] || taskTabs[activeTabId])) {
     // Document/browser/task tabs have no active session or focused pane.
@@ -933,6 +989,10 @@ interface TermStore {
    * only the one unpinned session slot is reusable.
    */
   pinnedTabs: SessionId[];
+  /** Project whose tabs the bar shows when `scopeTabsToProject` is on; `null` shows every tab. Never persisted. */
+  activeProjectId: string | null;
+  /** Tab that was active when each project was last left, restored on switching back. */
+  lastTabByProject: Record<string, SessionId>;
   /**
    * Status notice after automatic background-tab eviction. Timestamp retriggers notices for repeated labels.
    */
@@ -1064,6 +1124,8 @@ interface TermStore {
   inspectorTab: InspectorTab;
   /** Single-tab mode: reuse the session slot and keep replaced tabs alive in the background. */
   singleTabMode: boolean;
+  /** Tab bar shows only the active project's tabs plus global terminals. */
+  scopeTabsToProject: boolean;
   /** Terminal renderer: stable DOM or accelerated WebGL with GPU context limits. */
   termRenderer: TermRenderer;
   /** Optional full redraw when returning to a tab, for GPU artifacts or blank frames. */
@@ -1141,6 +1203,14 @@ interface TermStore {
   composerInlineChips: ComposerChipId[];
   /** Revision of the default inline set the saved list has been migrated to. */
   composerInlineChipsRevision: number;
+  /** Sidebar order: on keeps the most recently active projects and sessions at the top, off is the manual order. */
+  sortByActivity: boolean;
+  /**
+   * Live copy of each persistent session's last activity in milliseconds, keyed by session id. Seeded from the
+   * tree snapshot's `lastActiveAt` and advanced immediately by `noteSessionActivity`, so the sidebar reorders
+   * without waiting for the coalesced backend write. Ids without activity are absent.
+   */
+  sessionActivity: Record<SessionId, number>;
 
   /** Saved agent launch configurations shown in the new-session menu, in menu order. */
   agentPresets: AgentPreset[];
@@ -1254,6 +1324,8 @@ interface TermStore {
   clearSelection: () => void;
   /** Sets the right-panel inspection target. */
   setInspectTarget: (node: SelNode | null) => void;
+  /** Makes a project active; with scoped tabs, switches to its last tab, else its first visible one. */
+  setActiveProject: (projectId: string | null) => void;
   /** Sets or clears one-shot sidebar reveal suppression. */
   setRevealSuppress: (id: SessionId | null) => void;
   setRevealProject: (id: string | null) => void;
@@ -1504,6 +1576,7 @@ interface TermStore {
   setInspectorTab: (v: InspectorTab) => void;
   /** Toggles persisted single-tab mode. */
   setSingleTabMode: (v: boolean) => void;
+  setScopeTabsToProject: (v: boolean) => void;
   /** Toggles confirmation before spawning child sessions. */
   setSpawnConfirm: (v: boolean) => void;
   /** Remembers the quit dialog's "save workspace" choice as the default for the next exit. */
@@ -1535,6 +1608,17 @@ interface TermStore {
   toggleInfoSection: (id: string) => void;
   /** Replaces the ordered list of composer chips shown inline; chips left out are off. */
   setComposerInlineChips: (ids: ComposerChipId[]) => void;
+  /** Switches the sidebar between the activity order and the manual order, persisted like the other preferences. */
+  setSortByActivity: (v: boolean) => void;
+  /**
+   * Records activity on a persistent session: advances the live copy and asks the backend to persist the stamp.
+   * Called by the two input paths (terminal input, chat submission) and by the agent-state observer. Reading is
+   * not activity: opening a session, switching to its tab or focusing its pane records nothing, so a session
+   * the user only looks at keeps its place. Calls for the same session within one second are ignored (one
+   * burst counts once); ids that are not in the tree (drafts, browser tabs) are ignored; on the share surface
+   * it does nothing. `now` exists for tests.
+   */
+  noteSessionActivity: (id: SessionId, now?: number) => void;
   /** Turns the backend's automatic usage polling on or off. */
   setUsageAutoRefresh: (v: boolean) => void;
   /** Sets how often the backend refreshes the usage snapshot, in seconds. */
@@ -1592,6 +1676,8 @@ interface TermStore {
     shell?: string | null;
     cwd?: string | null;
     name?: string;
+    /** Global terminal: no project, home directory, visible in every project's tab bar. */
+    global?: boolean;
     /** Project-tree target used to avoid inheriting an unrelated active session directory. */
     target?: {
       projectId: string;
@@ -1618,6 +1704,9 @@ const NOTIFY_STATES: AgentState[] = ["asking", "waiting", "background"];
  * Only the legacy arbitration path below reads this; the backend keeps its own copy for the same purpose.
  */
 const workingPulseAt = new Map<string, number>();
+/** Last time `noteSessionActivity` accepted a call per session; calls within this window are one burst. */
+const activityNotedAt = new Map<string, number>();
+const ACTIVITY_BURST_MS = 1000;
 
 /** Escape hatch: set `vlx-arbitration` to `frontend` to decide agent state in the client again. */
 const ARBITRATION_KEY = "vlx-arbitration";
@@ -1713,6 +1802,7 @@ function persistAndApplyVisual(getState: () => TermStore) {
     navLayout: s.navLayout,
     inspectorTab: s.inspectorTab,
     singleTabMode: s.singleTabMode,
+    scopeTabsToProject: s.scopeTabsToProject,
     termRenderer: s.termRenderer,
     redrawOnReveal: s.redrawOnReveal,
     outputScheduler: s.outputScheduler,
@@ -1750,6 +1840,7 @@ function persistAndApplyVisual(getState: () => TermStore) {
     infoCollapsed: s.infoCollapsed,
     composerInlineChips: s.composerInlineChips,
     composerInlineChipsRevision: s.composerInlineChipsRevision,
+    sortByActivity: s.sortByActivity,
   };
   saveSettings(ps);
   applyVisual(visualOf(ps));
@@ -1979,6 +2070,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
   groups: [],
   treeMutationError: null,
   sessions: [],
+  sessionActivity: {},
   archivedSessions: [],
   treeLoaded: false,
   runtimes: {},
@@ -2008,6 +2100,8 @@ export const useTermStore = create<TermStore>((set, get) => ({
   focusedPaneId: null,
   liveTabs: [],
   pinnedTabs: [],
+  activeProjectId: null,
+  lastTabByProject: {},
   liveEvictNotice: null,
   liveEvictAsk: false,
   docTabs: {},
@@ -2081,9 +2175,20 @@ export const useTermStore = create<TermStore>((set, get) => ({
     }
     set((state) => {
       const runtimes = { ...state.runtimes };
+      // Merge the persisted activity with the live copy: a stamp noted here moments ago may be newer than
+      // what the coalesced write has persisted, and sessions that left the tree drop out of the map.
+      const sessionActivity: Record<SessionId, number> = {};
       for (const s of t.sessions) {
         if (!runtimes[s.id]) runtimes[s.id] = { status: "idle" };
+        const at = Math.max(state.sessionActivity[s.id] ?? 0, s.lastActiveAt ?? 0);
+        if (at > 0) sessionActivity[s.id] = at;
       }
+      let activeProjectId =
+        !env.isRemoteWindow &&
+        state.activeProjectId &&
+        t.projects.some((p) => p.id === state.activeProjectId)
+          ? state.activeProjectId
+          : null;
       let layoutPatch = {};
       if (!layoutRestored) {
         // Restore layout from local storage on the first load only.
@@ -2137,6 +2242,23 @@ export const useTermStore = create<TermStore>((set, get) => ({
               ...reconciled,
               ephemeralSessions: restoredEph,
             };
+            const restoredTab = reconciled.activeTabId;
+            layoutPatch = {
+              ...layoutPatch,
+              activeProjectId:
+                restoredTab && !env.isRemoteWindow
+                  ? tabProjectId(
+                      {
+                        paneTrees: reconciled.paneTrees,
+                        projects: t.projects,
+                        sessions: t.sessions,
+                        ephemeralSessions: restoredEph,
+                        taskTabs: {},
+                      },
+                      restoredTab,
+                    )
+                  : null,
+            };
             if (dormant) {
               // Mark every surviving leaf dormant. Reconciliation has already dropped leaves whose sessions no
               // longer exist, so this covers exactly what will be rendered.
@@ -2155,7 +2277,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         }
       } else {
         // Later tree refreshes reconcile current memory state only, preserving visible and background tabs.
-        layoutPatch = reconcileTabs({
+        const reconciled = reconcileTabs({
           sessions: t.sessions,
           ephemeralSessions: state.ephemeralSessions,
           openTabs: state.openTabs,
@@ -2167,7 +2289,27 @@ export const useTermStore = create<TermStore>((set, get) => ({
           docTabs: state.docTabs,
           browserTabs: state.browserTabs,
           taskTabs: state.taskTabs,
+          scopeTabsToProject: state.scopeTabsToProject,
+          activeProjectId,
+          projects: t.projects,
         });
+        layoutPatch = reconciled;
+        // A refresh can move the active tab's session to another project, so follow the tab.
+        if (!env.isRemoteWindow) {
+          activeProjectId = projectShowing(
+            {
+              scopeTabsToProject: state.scopeTabsToProject,
+              activeProjectId,
+              projects: t.projects,
+              sessions: t.sessions,
+              ephemeralSessions: state.ephemeralSessions,
+              openTabs: reconciled.openTabs,
+              paneTrees: reconciled.paneTrees,
+              taskTabs: reconciled.taskTabs,
+            },
+            reconciled.activeTabId,
+          );
+        }
       }
       const sidebarTreeViews = state.sidebarTreeViews;
       const primaryView =
@@ -2180,11 +2322,13 @@ export const useTermStore = create<TermStore>((set, get) => ({
         sessions: t.sessions,
         treeLoaded: true,
         runtimes,
+        sessionActivity,
         sidebarTreeViews,
         treeFilter: primaryView.treeFilter,
         statusFilter: primaryView.statusFilter,
         statusFilterIds: primaryView.statusFilterIds,
         markFilter: primaryView.markFilter,
+        activeProjectId,
         ...layoutPatch,
       };
     });
@@ -2325,6 +2469,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       };
     });
     saveSidebarViewsTick(get);
+    get().setActiveProject(input.projectId);
     // Persist expansion and reload authoritative tree data in the background after the terminal can open.
     const expand = input.parentSessionId
       ? tree.setCollapsed("session", input.parentSessionId, false)
@@ -2695,6 +2840,30 @@ export const useTermStore = create<TermStore>((set, get) => ({
   clearSelection: () => set({ selection: [], selectionAnchor: null }),
 
   setInspectTarget: (node) => set({ inspectTarget: node }),
+
+  setActiveProject: (projectId) => {
+    // Remote windows follow another window's tabs, so they never filter their own.
+    if (env.isRemoteWindow) return;
+    set((state) => {
+      if (state.activeProjectId === projectId) return {};
+      if (projectId !== null) {
+        const target = state.projects.find((p) => p.id === projectId);
+        if (!target || target.rootPath === "") return {};
+      }
+      const lastTabByProject =
+        state.activeProjectId && state.activeTabId
+          ? { ...state.lastTabByProject, [state.activeProjectId]: state.activeTabId }
+          : state.lastTabByProject;
+      if (!state.scopeTabsToProject || projectId === null) {
+        return { activeProjectId: projectId, lastTabByProject };
+      }
+      const visible = visibleTabIds({ ...state, activeProjectId: projectId });
+      const remembered = lastTabByProject[projectId];
+      const tabId = remembered && visible.includes(remembered) ? remembered : (visible[0] ?? null);
+      return { activeProjectId: projectId, lastTabByProject, ...activateTab(state, tabId) };
+    });
+    saveLayoutTick();
+  },
   setRevealSuppress: (id) => set({ revealSuppressId: id }),
   setRevealProject: (id) => set({ revealProjectId: id }),
 
@@ -2757,6 +2926,8 @@ export const useTermStore = create<TermStore>((set, get) => ({
     // Explicitly opening a session always starts it, so drop any leftover dormant mark from a restored
     // workspace whose pane was closed before it was ever woken. Non-dormant sessions are unaffected.
     get().wakeSession(id);
+    const owner = projectOpening(get(), id);
+    if (owner !== null && owner !== get().activeProjectId) get().setActiveProject(owner);
     set((state) => {
       // Opening/focusing no longer clears notifications immediately; `useNotifications` waits two seconds.
       const notifications = state.notifications;
@@ -2821,7 +2992,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         state.singleTabMode && !opts?.newTab && !isTerminalKind
           ? isReusableTab(state.activeTabId)
             ? state.activeTabId
-            : (state.openTabs.find((t) => isReusableTab(t)) ?? null)
+            : (visibleTabIds(state).find((t) => isReusableTab(t)) ?? null)
           : null;
       const canReuse = reuseTabId != null;
 
@@ -2924,12 +3095,14 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
   setActiveTab: (tabId) => {
     set((state) => {
+      const activeProjectId = env.isRemoteWindow ? null : projectShowing(state, tabId);
       if (state.docTabs[tabId] || state.browserTabs[tabId] || state.taskTabs[tabId]) {
         // Document/browser/task tabs have no session or focused pane, naturally disabling session-only controls.
         return {
           activeTabId: tabId,
           activeSessionId: null,
           focusedPaneId: null,
+          activeProjectId,
         };
       }
       const t = state.paneTrees[tabId];
@@ -2941,6 +3114,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         lastActiveSessionTabId: t ? tabId : state.lastActiveSessionTabId,
         activeSessionId: leaf?.sessionId ?? tabId,
         focusedPaneId: leaf?.paneId ?? null,
+        activeProjectId,
       };
     });
     saveLayoutTick();
@@ -2968,7 +3142,6 @@ export const useTermStore = create<TermStore>((set, get) => ({
     // flows in browser mode, so it cannot express user intent reliably. Repeated stops are idempotent.
     stopTabSessions(get(), tabId);
     set((state) => {
-      const idx = state.openTabs.indexOf(tabId);
       const openTabs = state.openTabs.filter((t) => t !== tabId);
       const paneTrees = { ...state.paneTrees };
       delete paneTrees[tabId];
@@ -2983,7 +3156,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
       let { activeTabId, activeSessionId, focusedPaneId } = state;
       if (activeTabId === tabId) {
-        const nextTab = openTabs[idx] ?? openTabs[idx - 1] ?? null;
+        const nextTab = nextVisibleTab(state, tabId);
         activeTabId = nextTab;
         if (nextTab && paneTrees[nextTab]) {
           const leaf = taskReturnLeaf(paneTrees[nextTab], nextTab, closingTask);
@@ -2998,10 +3171,11 @@ export const useTermStore = create<TermStore>((set, get) => ({
       // Retarget a closed reuse anchor to the current or any remaining visible session tab.
       let lastActiveSessionTabId = state.lastActiveSessionTabId;
       if (lastActiveSessionTabId === tabId) {
-        lastActiveSessionTabId =
-          activeTabId && paneTrees[activeTabId]
-            ? activeTabId
-            : (openTabs.find((t) => paneTrees[t]) ?? null);
+        lastActiveSessionTabId = retargetReuseAnchor(
+          { ...state, openTabs, paneTrees, taskTabs },
+          activeTabId,
+          paneTrees,
+        );
       }
       const pinnedTabs = state.pinnedTabs.filter((t) => t !== tabId);
       return {
@@ -3117,6 +3291,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         focusedPaneId: null,
       };
     });
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     saveLayoutTick();
   },
 
@@ -3288,7 +3463,6 @@ export const useTermStore = create<TermStore>((set, get) => ({
       const hasNamed = collectSessionIds(tree).some((sid) => sessById.has(sid));
       if (!hasNamed) return {};
 
-      const idx = state.openTabs.indexOf(tabId);
       const openTabs = state.openTabs.filter((t) => t !== tabId);
       // Remove background tabs from the pinned set because they no longer participate in reuse selection.
       const pinnedTabs = state.pinnedTabs.filter((t) => t !== tabId);
@@ -3305,7 +3479,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         lastActiveSessionTabId,
       } = state;
       if (activeTabId === tabId) {
-        const nextTab = openTabs[idx] ?? openTabs[idx - 1] ?? null;
+        const nextTab = nextVisibleTab(state, tabId);
         activeTabId = nextTab;
         if (nextTab && paneTrees[nextTab]) {
           const leaf = firstLeaf(paneTrees[nextTab]);
@@ -3319,10 +3493,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       }
       // Retarget the reuse anchor to the current or another visible session tab.
       if (lastActiveSessionTabId === tabId) {
-        lastActiveSessionTabId =
-          activeTabId && paneTrees[activeTabId]
-            ? activeTabId
-            : (openTabs.find((t) => paneTrees[t]) ?? null);
+        lastActiveSessionTabId = retargetReuseAnchor({ ...state, openTabs, paneTrees }, activeTabId, paneTrees);
       }
 
       // Apply standard overflow eviction; the newly backgrounded tab sits at the tail and is evicted last.
@@ -3395,6 +3566,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       hotkey: null,
       // Attach a split terminal beneath its focused source session so the sidebar reflects its origin.
       parentSessionId: focused.id,
+      ...(focused.global ? { global: true } : {}),
       // Ephemeral sessions start collapsed so nested splits do not automatically expand the Scratch tree.
       collapsed: true,
       worktreePath: null,
@@ -3491,6 +3663,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
           }
         : {}),
     });
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     get().pruneEphemeral();
     saveLayoutTick();
   },
@@ -3511,6 +3684,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
     const tiled = ids.slice(0, GRID_MAX);
     for (const id of tiled) st.wakeSession(id);
     set(placed);
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     traceSplit("tile", `tiled ${tiled.length} sessions in tab ${placed.activeTabId}`, {
       sessionIds: tiled,
       tabId: placed.activeTabId ?? undefined,
@@ -3648,8 +3822,12 @@ export const useTermStore = create<TermStore>((set, get) => ({
         st.ephemeralSessions[st.activeSessionId] ??
         null)
       : null;
+    const scopedProject =
+      st.scopeTabsToProject && st.activeProjectId
+        ? st.projects.find((p) => p.id === st.activeProjectId)
+        : undefined;
     const projectId =
-      override?.projectId ?? active?.projectId ?? st.projects[0]?.id ?? null;
+      override?.projectId ?? active?.projectId ?? scopedProject?.id ?? st.projects[0]?.id ?? null;
     if (!projectId) return;
     const groupId = override?.groupId ?? null;
     const parentSessionId = override?.parentSessionId ?? null;
@@ -4279,6 +4457,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? activeSessionId
           : s.mirrorFocusSessionId,
     }));
+    set((s) => ({ activeProjectId: scopedActiveProject(s) }));
     // A mirrored arrangement counts as the layout for this session. Without this, a first `loadTree`
     // still in flight would take its restore branch and replace the peer's layout with this client's
     // stale localStorage copy — and then publish that copy back, rearranging the peer too.
@@ -4647,6 +4826,15 @@ export const useTermStore = create<TermStore>((set, get) => ({
     set({ singleTabMode: v });
     persistAndApplyVisual(get);
   },
+  setScopeTabsToProject: (v) => {
+    set((state) => ({
+      scopeTabsToProject: v,
+      activeProjectId: env.isRemoteWindow
+        ? null
+        : projectShowing({ ...state, scopeTabsToProject: v }, state.activeTabId),
+    }));
+    persistAndApplyVisual(get);
+  },
   setSpawnConfirm: (v) => {
     set({ spawnConfirm: v });
     persistAndApplyVisual(get);
@@ -4722,6 +4910,28 @@ export const useTermStore = create<TermStore>((set, get) => ({
   setComposerInlineChips: (ids) => {
     set({ composerInlineChips: sanitizeComposerInlineChips(ids) });
     persistAndApplyVisual(get);
+  },
+  setSortByActivity: (v) => {
+    set({ sortByActivity: v });
+    persistAndApplyVisual(get);
+    // Stamps other clients wrote while the mode was off were persisted without a broadcast; re-read the tree
+    // once so this client orders by the real history instead of its stale live copy.
+    if (v && get().treeLoaded) void get().loadTree().catch(() => {});
+  },
+  noteSessionActivity: (id, now = Date.now()) => {
+    // A share visitor's focus is not the host's activity, and the restricted share dispatch rejects the write,
+    // which would log one failed request per focus.
+    if (isShareSurface) return;
+    const state = get();
+    if (!state.sessions.some((s) => s.id === id)) return;
+    const noted = activityNotedAt.get(id);
+    if (noted !== undefined && now - noted < ACTIVITY_BURST_MS) return;
+    activityNotedAt.set(id, now);
+    if ((state.sessionActivity[id] ?? 0) < now) {
+      set({ sessionActivity: { ...state.sessionActivity, [id]: now } });
+    }
+    // The backend coalesces on its own clock and broadcasts the tree only on a real write.
+    tree.touchSessionActivity(id).catch(() => {});
   },
   setUsageAutoRefresh: (v) => {
     set({ usageAutoRefresh: v });
@@ -4878,6 +5088,46 @@ export const useTermStore = create<TermStore>((set, get) => ({
 
   newScratchTab: async (opts) => {
     const st = get();
+    const effShell = (opts?.shell === undefined ? st.defaultShell : opts.shell) || null;
+    const create = (placement: Pick<Session, "projectId" | "groupId" | "cwd" | "global">) => {
+      const id = `eph-${genId()}`;
+      const ephemeral: Session = {
+        id,
+        ...placement,
+        name: opts?.name ?? nextTerminalName(st.sessions, st.ephemeralSessions),
+        kind: "terminal",
+        shell: effShell,
+        envJson: null,
+        initCmd: null,
+        hotkey: null,
+        parentSessionId: null,
+        // Ephemeral sessions start collapsed to keep nested Scratch entries compact.
+        collapsed: true,
+        worktreePath: null,
+        sortOrder: 0,
+        // Assign current Unix time to frontend-only sessions instead of displaying the epoch.
+        createdAt: Math.floor(Date.now() / 1000),
+      };
+      const leaf = makeLeaf(id);
+      set((state) => ({
+        ephemeralSessions: { ...state.ephemeralSessions, [id]: ephemeral },
+        runtimes: { ...state.runtimes, [id]: { status: "idle" } },
+        openTabs: [...state.openTabs, id],
+        // Scratch terminals are pinned and never replaced by single-tab reuse.
+        pinnedTabs: [...state.pinnedTabs, id],
+        paneTrees: { ...state.paneTrees, [id]: leaf },
+        activeTabId: id,
+        lastActiveSessionTabId: id,
+        activeSessionId: id,
+        focusedPaneId: leaf.paneId,
+      }));
+      saveLayoutTick();
+    };
+    if (opts?.global) {
+      // No cwd: the backend starts the shell in the user's home directory.
+      create({ projectId: "", groupId: null, cwd: null, global: true });
+      return;
+    }
     const { activeSessionId, inspectTarget } = st;
     const targetSession = opts?.target?.sessionId
       ? (st.sessions.find((s) => s.id === opts.target?.sessionId) ??
@@ -4903,15 +5153,20 @@ export const useTermStore = create<TermStore>((set, get) => ({
           ? st.projects.find((p) => p.id === overrideGroup.projectId)
           : undefined;
     // Otherwise follow the active session's project and working directory, matching split behavior.
-    const active = activeSessionId
+    const activeSession = activeSessionId
       ? (st.sessions.find((s) => s.id === activeSessionId) ??
         st.ephemeralSessions[activeSessionId] ??
         null)
       : null;
+    // A global terminal belongs to no project, so a terminal opened from it follows the active project.
+    const active = activeSession?.global ? null : activeSession;
     const project =
       targetProject ??
       overrideProject ??
       (active && st.projects.find((p) => p.id === active.projectId)) ??
+      (st.scopeTabsToProject && st.activeProjectId
+        ? st.projects.find((p) => p.id === st.activeProjectId)
+        : undefined) ??
       st.projects[0];
     // Working-directory priority: explicit, inspected project/group root, runtime cwd, session cwd, session
     // project root, then first project root. Inspection deliberately excludes the previous session's runtime cwd.
@@ -4934,52 +5189,18 @@ export const useTermStore = create<TermStore>((set, get) => ({
       cwd = cwd ?? active.cwd ?? null;
     }
     cwd = cwd ?? project?.rootPath ?? null;
-    const id = `eph-${genId()}`;
-    // Use the global default shell when scratch creation does not specify one.
-    const effShell =
-      (opts?.shell === undefined ? st.defaultShell : opts.shell) || null;
-    const ephemeral: Session = {
-      id,
-      projectId:
-        opts?.target?.projectId ??
-        overrideProject?.id ??
-        active?.projectId ??
-        project?.id ??
-        "",
+    const projectId =
+      opts?.target?.projectId ?? overrideProject?.id ?? active?.projectId ?? project?.id ?? "";
+    if (st.projects.some((p) => p.id === projectId) && projectId !== get().activeProjectId) {
+      get().setActiveProject(projectId);
+    }
+    create({
+      projectId,
       groupId: opts?.target
         ? (opts.target.groupId ?? targetSession?.groupId ?? null)
-        : (overrideGroup?.id ??
-          (overrideProject ? null : active?.groupId) ??
-          null),
-      name: opts?.name ?? nextTerminalName(st.sessions, st.ephemeralSessions),
-      kind: "terminal",
-      shell: effShell,
+        : (overrideGroup?.id ?? (overrideProject ? null : active?.groupId) ?? null),
       cwd,
-      envJson: null,
-      initCmd: null,
-      hotkey: null,
-      parentSessionId: null,
-      // Ephemeral sessions start collapsed to keep nested Scratch entries compact.
-      collapsed: true,
-      worktreePath: null,
-      sortOrder: 0,
-      // Assign current Unix time to frontend-only sessions instead of displaying the epoch.
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-    const leaf = makeLeaf(id);
-    set((state) => ({
-      ephemeralSessions: { ...state.ephemeralSessions, [id]: ephemeral },
-      runtimes: { ...state.runtimes, [id]: { status: "idle" } },
-      openTabs: [...state.openTabs, id],
-      // Scratch terminals are pinned and never replaced by single-tab reuse.
-      pinnedTabs: [...state.pinnedTabs, id],
-      paneTrees: { ...state.paneTrees, [id]: leaf },
-      activeTabId: id,
-      lastActiveSessionTabId: id,
-      activeSessionId: id,
-      focusedPaneId: leaf.paneId,
-    }));
-    saveLayoutTick();
+    });
   },
 
   setEphemeralShell: (id, shell) =>

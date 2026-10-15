@@ -45,6 +45,8 @@ mod mobile_push;
 mod split_trace;
 pub mod diagnostics;
 #[cfg(feature = "gui")]
+mod main_window;
+#[cfg(feature = "gui")]
 mod native_menu;
 #[cfg(feature = "gui")]
 mod native_drop;
@@ -66,6 +68,9 @@ mod ssh_remote;
 // GUI-only pure-Rust russh transport, currently used on Windows.
 #[cfg(feature = "gui")]
 mod ssh_russh;
+// GUI-only user port forwarding for SSH remote windows: detection, registry and request handling.
+#[cfg(feature = "gui")]
+mod ssh_ports;
 mod web;
 mod wsl_remote;
 // GUI-only macOS native notifications with session-aware click navigation.
@@ -1065,6 +1070,28 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                 }
             });
 
+            // Remote windows cannot invoke local commands, so port forwarding requests arrive as events and
+            // every request is answered with a full snapshot. Handling runs on a plain thread because it
+            // performs blocking SSH I/O and may drop the last transport, which must not happen in async code.
+            let ports_app = app.handle().clone();
+            app.listen_any("vlx://ports-request", move |event| {
+                let Ok(req) = serde_json::from_str::<ssh_ports::PortsRequest>(event.payload()) else {
+                    return;
+                };
+                let app = ports_app.clone();
+                std::thread::spawn(move || {
+                    let Some(out) = ssh_ports::handle(req) else { return };
+                    if let Some(lport) = out.open_lport {
+                        use tauri_plugin_opener::OpenerExt;
+                        let _ = app
+                            .opener()
+                            .open_url(format!("http://localhost:{lport}"), None::<&str>);
+                    }
+                    use tauri::Emitter;
+                    let _ = app.emit("ssh://ports-state", &out.snapshot);
+                });
+            });
+
             let wsl_app = app.handle().clone();
             app.listen_any("vlx://wsl-reconnect", move |event| {
                 let Ok(v) = serde_json::from_str::<serde_json::Value>(event.payload()) else { return; };
@@ -1300,11 +1327,28 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                         label,
                         event: tauri::WindowEvent::CloseRequested { api, .. },
                         ..
-                    } if label == "main"
+                    } if label == main_window::MAIN_LABEL
                         && !app.state::<QuitState>().confirmed.load(Ordering::SeqCst) =>
                     {
                         api.prevent_close();
-                        request_quit_confirmation(app);
+                        // While a remote window is open, closing main only hides it so remote-only work
+                        // continues; local sessions keep running in the background.
+                        if !main_window::hide_main_for_remote(app) {
+                            request_quit_confirmation(app);
+                        }
+                    }
+                    // The last remote window closing brings a hidden main window back.
+                    tauri::RunEvent::WindowEvent {
+                        label,
+                        event: tauri::WindowEvent::Destroyed,
+                        ..
+                    } if !app.state::<QuitState>().confirmed.load(Ordering::SeqCst) => {
+                        main_window::on_window_destroyed(app, label);
+                    }
+                    // A Dock click brings a hidden main window back.
+                    #[cfg(target_os = "macos")]
+                    tauri::RunEvent::Reopen { .. } => {
+                        main_window::reveal_hidden_main(app);
                     }
                     // Window activation leaves keyboard focus on the top-level HWND under the `unstable`
                     // child-webview path; hand it back to the webview the user was typing in.
@@ -1354,6 +1398,8 @@ fn request_quit_confirmation(app: &tauri::AppHandle) {
     if st.confirmed.load(Ordering::SeqCst) {
         return;
     }
+    // The frontend dialog lives in the main webview, which may be hidden behind remote-only work.
+    main_window::reveal_hidden_main(app);
     // A request arriving while one is already pending is not a duplicate to drop: the frontend that
     // acknowledged the first one may since have reloaded or crashed, taking its dialog with it. Dropping
     // it would latch `pending` forever and leave the application unquittable, because only the frontend

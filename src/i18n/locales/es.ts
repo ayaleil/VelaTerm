@@ -533,6 +533,8 @@ const es: typeof en = {
   "settings.maxLiveTabs": "Background limit", // Background limit
   "settings.defaultShell": "Shell predeterminada", // Default shell
   "settings.spawnConfirm": "Confirm before spawn", // Confirm before spawn
+  "settings.scopeTabsToProject": "Mostrar solo las pestañas del proyecto activo", // Show only the active project's tabs
+  "settings.scopeTabsToProjectHint": "Al seleccionar un proyecto en la barra lateral, solo verás sus pestañas y los terminales globales. Las pestañas ocultas siguen en ejecución.", // Selecting a project in the sidebar shows only its tabs plus global terminals. Hidden tabs keep running.
   "settings.usageAuto": "Usage auto-refresh", // Usage auto-refresh
   "settings.usageRefresh": "Usage refresh", // Usage refresh
   "settings.autoContinue": "Continuar tras el restablecimiento", // Continue after limit resets
@@ -1139,6 +1141,9 @@ const es: typeof en = {
   "tree.refreshStatusMatch": "Actualizar estado",
   "tree.filterStatusSection": "Estado", // Status
   "tree.filterMarkSection": "Marca", // Mark
+  "tree.sortSection": "Orden", // Order
+  "tree.sortByActivity": "Ordenar por actividad", // Sort by activity
+  "tree.sortByActivityHint": "Mantiene arriba los proyectos y sesiones con actividad más reciente; desactivado restaura el orden manual.", // Keeps the most recently active projects and sessions at the top; off restores the manual order.
   "tree.viewMainName": "Principal",
   "tree.viewUntitled": "Vista sin nombre",
   "tree.viewDefaultName": (n) => `Vista ${n}`,
@@ -1173,6 +1178,7 @@ const es: typeof en = {
   "tree.openProject": "Abrir proyecto", // Open Project
   "tree.noAttention": "Ninguna sesión coincide con el filtro de estado", // No sessions match the status filter
   "tree.noMatch": "Sin coincidencias", // No matches
+  "tree.otherProjects": "Otros proyectos", // Other projects
 
   // Dialog fields
   "tree.groupName": "Nombre del grupo", // Group name
@@ -1362,6 +1368,8 @@ const es: typeof en = {
   "center.splitHint": "Abre una sesión para dividirla con estos atajos:",
   "tab.unsavedDot": "Cambios sin guardar", // Unsaved changes
   "tab.newTerminal": "Nuevo terminal", // New terminal
+  "tab.newGlobalTerminal": "Nuevo terminal global", // New global terminal
+  "tab.globalTerminal": "Terminal global", // Global terminal
   "tab.newDocument": "Nuevo documento", // New document
   "tab.bgTitle": (n) =>
     `Pestañas en segundo plano: ${n} (procesos aún en ejecución)`, // Background keep-alive tabs: {n}…
@@ -2415,6 +2423,25 @@ const es: typeof en = {
   "chat.antigravity.textOnly": "La vista de conversación de Antigravity actualmente solo admite mensajes de texto.",
   "chat.antigravity.permissionsHint": "Las herramientas que requieren aprobación deben autorizarse previamente en la configuración de Antigravity o utilizarse en la vista de terminal.",
   "chat.antigravity.settingsHint": "Cambie el modelo, el nivel de razonamiento o los permisos entre turnos.",
+  "ports.title": "Puertos", // Ports
+  "ports.active": "Reenviados", // Forwarded
+  "ports.activeEmpty": "No hay puertos reenviados", // No forwarded ports
+  "ports.detected": "Detectados", // Detected
+  "ports.detectedEmpty": "No se encontraron puertos en escucha", // No listening ports found
+  "ports.detectionUnavailable": "La detección de puertos no está disponible en este host", // Port detection is not available on this host
+  "ports.manual": "Reenviar un puerto", // Forward a port
+  "ports.portPlaceholder": "Puerto remoto", // Remote port
+  "ports.forward": "Reenviar", // Forward
+  "ports.open": "Abrir en el navegador", // Open in browser
+  "ports.stop": "Detener", // Stop
+  "ports.localChanged": (port) => `El puerto local ${port} estaba ocupado, así que se usa otro puerto local`, // Local port {port} was busy, so another local port is used
+  "ports.unavailable": "No disponible — actualiza VelaTerm", // Unavailable — update VelaTerm
+  "ports.invalidPort": (port) => `Puerto no válido: ${port}`, // Invalid port: {port}
+  "ports.missingPort": "Introduce un puerto", // Enter a port
+  "ports.unknownAction": (action) => `Acción desconocida: ${action}`, // Unknown action: {action}
+  "ports.limit": (max) => `Se pueden reenviar como máximo ${max} puertos por conexión`, // At most {max} ports can be forwarded per connection
+  "ports.notForwarded": (port) => `El puerto ${port} no está reenviado`, // Port {port} is not forwarded
+  "statusbar.ports": (n) => (n === 1 ? "1 puerto reenviado" : `${n} puertos reenviados`), // {n} forwarded ports
 };
 
 export default es;
