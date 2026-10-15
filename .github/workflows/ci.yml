@@ -1,0 +1,104 @@
+# Continuous integration for the fork.
+#
+# Upstream ships no CI, so every pull request here is the first place the two halves of the codebase are
+# compiled together: the TypeScript/React frontend and the Rust core under src-tauri. The Rust half is the
+# one that matters most — merged community patches touch ssh_remote.rs, lib.rs, main_window.rs and
+# web/dispatch.rs, and nothing on a developer's machine necessarily builds those for every target.
+#
+# The Rust matrix covers the two feature sets the project actually ships:
+#   · sidecar  — the headless backend the Linux Electron edition packages (no Tauri/WebKit/GTK).
+#   · gui      — the default Tauri desktop build, compiled natively on each OS so no cross-toolchain is needed.
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type-check and bundle
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+  rust:
+    name: rust (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-sidecar
+            os: ubuntu-latest
+            features: --no-default-features --features sidecar
+          - name: linux-gui
+            os: ubuntu-latest
+            features: ""
+          - name: macos-gui
+            os: macos-latest
+            features: ""
+          - name: windows-gui
+            os: windows-latest
+            features: ""
+    steps:
+      - uses: actions/checkout@v7
+
+      # font-kit links against the system fontconfig/freetype on Linux, so even the Tauri-free sidecar build
+      # needs them. The GUI build additionally needs the WebKitGTK stack that wry and the gtk crate wrap.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig1-dev \
+            libfreetype6-dev
+          if [ "${{ matrix.name }}" = "linux-gui" ]; then
+            sudo apt-get install -y --no-install-recommends \
+              libwebkit2gtk-4.1-dev \
+              libjavascriptcoregtk-4.1-dev \
+              libsoup-3.0-dev \
+              libgtk-3-dev \
+              libayatana-appindicator3-dev \
+              librsvg2-dev \
+              libxdo-dev \
+              patchelf
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.name }}
+
+      # Debug builds read ../dist from disk at runtime instead of embedding it, so the test run needs no
+      # frontend bundle; build.rs creates the empty directory the rust-embed macro resolves at compile time.
+      - name: Build and test
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml ${{ matrix.features }}
