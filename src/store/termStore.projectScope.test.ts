@@ -27,6 +27,17 @@ vi.mock("../ipc/commands", () => ({
 vi.mock("../ipc/tree", () => ({
   listTree: vi.fn(async () => tree.data),
   createSession: vi.fn(),
+  persistSession: vi.fn(async (input: { id: string; projectId: string; name: string; cwd?: string | null }) => ({
+    id: input.id,
+    projectId: input.projectId,
+    groupId: null,
+    name: input.name,
+    kind: "terminal",
+    cwd: input.cwd ?? null,
+    collapsed: false,
+    sortOrder: 0,
+    createdAt: 0,
+  })),
   setCollapsed: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../ipc/chat", () => ({
@@ -294,7 +305,7 @@ describe("opening sessions and terminals", () => {
     });
     await useTermStore.getState().newScratchTab();
     const s = useTermStore.getState();
-    const created = s.ephemeralSessions[s.activeTabId!];
+    const created = s.sessions.find((x) => x.id === s.activeTabId)!;
     expect(created.projectId).toBe("A");
     expect(created.cwd).toBe("/tmp/A");
     expect(created.global).toBeUndefined();
@@ -349,11 +360,39 @@ describe("opening sessions and terminals", () => {
     await useTermStore.getState().addSession({ projectId: "B", groupId: null, name: "b9" });
     expect(useTermStore.getState().activeProjectId).toBeNull();
   });
+  it("a new terminal in a project is saved under that project", async () => {
+    await useTermStore.getState().newScratchTab({ target: { projectId: "B" }, name: "dev server" });
+    const s = useTermStore.getState();
+    const id = s.activeTabId!;
+    expect(ipcTree.persistSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id, projectId: "B", name: "dev server", cwd: "/tmp/B" }),
+    );
+    expect(s.ephemeralSessions[id]).toBeUndefined();
+    expect(s.sessions.find((x) => x.id === id)?.projectId).toBe("B");
+    expect(s.pinnedTabs).toContain(id);
+  });
+
+  it("a global terminal is not saved under any project", async () => {
+    vi.mocked(ipcTree.persistSession).mockClear();
+    await useTermStore.getState().newScratchTab({ global: true });
+    expect(ipcTree.persistSession).not.toHaveBeenCalled();
+    const s = useTermStore.getState();
+    expect(s.ephemeralSessions[s.activeTabId!]).toBeDefined();
+  });
+
+  it("a new terminal stays a draft when saving it fails", async () => {
+    vi.mocked(ipcTree.persistSession).mockRejectedValueOnce(new Error("db down"));
+    await useTermStore.getState().newScratchTab({ target: { projectId: "B" } });
+    const s = useTermStore.getState();
+    expect(s.ephemeralSessions[s.activeTabId!].projectId).toBe("B");
+    expect(s.openTabs).toContain(s.activeTabId);
+  });
+
   it("with scoping off, a new terminal without context lands in the first project", async () => {
     seed({ scopeTabsToProject: false, activeProjectId: "B", activeSessionId: null, activeTabId: null, inspectTarget: null });
     await useTermStore.getState().newScratchTab();
     const s = useTermStore.getState();
-    expect(s.ephemeralSessions[s.activeTabId!].projectId).toBe("A");
+    expect(s.sessions.find((x) => x.id === s.activeTabId)?.projectId).toBe("A");
   });
 
   it("a session from another project dropped into a pane switches to that project", () => {

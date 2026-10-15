@@ -5122,6 +5122,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
         focusedPaneId: leaf.paneId,
       }));
       saveLayoutTick();
+      return id;
     };
     if (opts?.global) {
       // No cwd: the backend starts the shell in the user's home directory.
@@ -5194,13 +5195,26 @@ export const useTermStore = create<TermStore>((set, get) => ({
     if (st.projects.some((p) => p.id === projectId) && projectId !== get().activeProjectId) {
       get().setActiveProject(projectId);
     }
-    create({
+    const id = create({
       projectId,
       groupId: opts?.target
         ? (opts.target.groupId ?? targetSession?.groupId ?? null)
         : (overrideGroup?.id ?? (overrideProject ? null : active?.groupId) ?? null),
       cwd,
     });
+    // Save the terminal under its project so it shows in the tree and survives a restart (empty, by name).
+    // Keep it pinned like a draft; if saving fails it stays a draft.
+    if (!st.projects.some((p) => p.id === projectId)) return;
+    try {
+      await get().persistSession(id);
+      set((state) =>
+        state.openTabs.includes(id) && !state.pinnedTabs.includes(id)
+          ? { pinnedTabs: [...state.pinnedTabs, id] }
+          : {},
+      );
+    } catch {
+      /* Keep the draft. */
+    }
   },
 
   setEphemeralShell: (id, shell) =>
