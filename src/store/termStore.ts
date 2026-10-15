@@ -1,5 +1,6 @@
 import { beginDiagnosticOperation } from "../ipc/diagnosticSafety";
 import { diagnosticEvent, } from "../ipc/transport";
+import { sessionNameFromTitle } from "../terminal/terminalTitle";
 //! Global Zustand state: SQLite-backed tree data, session runtime state, and UI state.
 //! The center area uses tabs containing recursively splittable pane trees.
 
@@ -559,6 +560,9 @@ let layoutRestored = false;
  * write, whose processes die with the application, but an explicitly saved workspace keeps them so restored
  * split layouts stay intact.
  */
+/** Session names being saved from a terminal title, keyed by session id. */
+const pendingTitleNames = new Map<SessionId, string>();
+
 function buildLayout(keepEphemeral: boolean): PersistedLayout {
   {
     const s = useTermStore.getState();
@@ -1454,6 +1458,8 @@ interface TermStore {
   ) => Promise<void>;
   /** Renames an ephemeral session, browser, or document draft in memory only. */
   renameScratch: (id: SessionId, name: string) => void;
+  /** Renames a session from the terminal title its program set, when that kind follows its title. */
+  applyTerminalTitle: (id: SessionId, title: string) => Promise<void>;
   pruneEphemeral: () => void;
   setRuntime: (id: SessionId, partial: Partial<SessionRuntime>) => void;
   /** Processes backend status signals into agent state and optional system notifications. */
@@ -3853,6 +3859,26 @@ export const useTermStore = create<TermStore>((set, get) => ({
     }
     get().closeTab(tabId); // Close the draft and destroy its child WebView.
     get().openSession(node.id); // Open the persisted node at its URL with shared login state.
+  },
+
+  applyTerminalTitle: async (id, title) => {
+    const st = get();
+    const persisted = st.sessions.find((s) => s.id === id);
+    const session = persisted ?? st.ephemeralSessions[id];
+    if (!session) return;
+    const name = sessionNameFromTitle(session.kind, title);
+    if (!name || name === session.name || pendingTitleNames.get(id) === name) return;
+    if (!persisted) {
+      get().renameScratch(id, name);
+      return;
+    }
+    // Claude's spinner retitles several times a second; skip repeats while the rename is in flight.
+    pendingTitleNames.set(id, name);
+    try {
+      await get().renameNode("session", id, name);
+    } finally {
+      if (pendingTitleNames.get(id) === name) pendingTitleNames.delete(id);
+    }
   },
 
   renameScratch: (id, name) => {
