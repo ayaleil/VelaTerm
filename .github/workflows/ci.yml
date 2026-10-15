@@ -16,6 +16,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -78,7 +81,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libfontconfig1-dev \
-            libfreetype6-dev
+            libfreetype6-dev \
+            zsh
           if [ "${{ matrix.name }}" = "linux-gui" ]; then
             sudo apt-get install -y --no-install-recommends \
               libwebkit2gtk-4.1-dev \
@@ -90,6 +94,19 @@ jobs:
               libxdo-dev \
               patchelf
           fi
+
+      # tauri.windows.conf.json bundles src-tauri/resources/gitbash/**/*, which is gitignored and produced by
+      # the unpublished scripts/fetch-gitbash.ps1. tauri_build resolves that glob while parsing the bundle
+      # config, so without it build.rs aborts with "path not found or didn't match any files" before anything
+      # compiles. The placeholder only satisfies the glob: Git Bash is genuinely absent either way, so terminal
+      # sessions fall back to PowerShell (see agent/gitbash.rs). Drop this once the resource can be provisioned.
+      - name: Provide a placeholder for the unpublished Git Bash resource
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources/gitbash
+          echo "Placeholder so the bundle resource glob resolves in CI. Not a real Git Bash tree." \
+            > src-tauri/resources/gitbash/CI-PLACEHOLDER.txt
 
       - uses: dtolnay/rust-toolchain@stable
 

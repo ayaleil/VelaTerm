@@ -17,8 +17,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# The build jobs run third-party install and build scripts, so they get a read-only token; only the job that
+# creates the release needs write access.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -98,11 +100,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # tauri.windows.conf.json bundles src-tauri/resources/gitbash/**/*, which is gitignored and produced by
-      # the unpublished scripts/fetch-gitbash.ps1. The override clears that resource so the bundle can be
-      # built from a clean clone; terminal sessions then fall back to PowerShell instead of the bundled Git
-      # Bash (see agent/gitbash.rs). Drop the override once the resource can be provisioned here.
+      # the unpublished scripts/fetch-gitbash.ps1. The glob must resolve twice: tauri_build reads it in
+      # build.rs, and the bundler reads it again when packaging. The placeholder satisfies both; Git Bash is
+      # genuinely absent either way, so terminal sessions fall back to PowerShell (see agent/gitbash.rs).
+      - name: Provide a placeholder for the unpublished Git Bash resource
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources/gitbash
+          echo "Placeholder so the bundle resource glob resolves in CI. Not a real Git Bash tree." \
+            > src-tauri/resources/gitbash/CI-PLACEHOLDER.txt
+
       - name: Build the Tauri bundle
-        run: pnpm tauri build --config .github/tauri.no-gitbash.conf.json
+        run: pnpm tauri build
 
       - uses: actions/upload-artifact@v7
         with:
@@ -147,6 +156,8 @@ jobs:
 
   publish:
     name: attach artifacts to the release
+    permissions:
+      contents: write
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [linux-appimage, windows-nsis, macos-dmg]
     runs-on: ubuntu-latest
