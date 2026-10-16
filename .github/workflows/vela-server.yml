@@ -1,0 +1,109 @@
+# Builds vela-server, the headless backend the desktop client provisions onto SSH hosts, for every platform
+# the client can connect to.
+#
+# Reusable: release.yml calls it with sign on tags and explicit secrets, and the PR check calls it with
+# sign: false, which needs no secrets. Each platform uploads an artifact named vela-server-<platkey> holding the
+# binary and its zip, plus a `.sig` beside each when signed; server-manifest.py turns those into the manifest.
+name: vela-server
+
+on:
+  workflow_call:
+    inputs:
+      sign:
+        description: Sign the binary and zip with the Tauri updater key.
+        type: boolean
+        required: true
+    # Optional so the unsigned PR check can call this without secrets; the signing step fails if they are absent.
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: vela-server ${{ matrix.platkey }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # `target` is the rustup triple; scripts/build-vela-server.sh owns the full cargo target per platkey.
+        include:
+          - platkey: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - platkey: linux-aarch64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          - platkey: darwin-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - platkey: darwin-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: vela-server-${{ matrix.platkey }}
+
+      # Linux builds cross-compile against glibc 2.17 with zig as the linker. The runner's system Python refuses
+      # pip installs, so a managed Python hosts both packages.
+      - uses: actions/setup-python@v6
+        if: runner.os == 'Linux'
+        with:
+          python-version: "3.12"
+
+      - name: Install cargo-zigbuild
+        if: runner.os == 'Linux'
+        run: python -m pip install cargo-zigbuild==0.23.4 ziglang==0.16.0
+
+      - run: pnpm install --frozen-lockfile
+
+      # Must precede the Cargo build: the release profile embeds dist/ into the velaterm binary.
+      - name: Build the frontend
+        run: pnpm build
+
+      - name: Build vela-server
+        run: bash scripts/build-vela-server.sh ${{ matrix.platkey }}
+
+      - name: Sign the binary and zip
+        if: inputs.sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          PLATKEY: ${{ matrix.platkey }}
+        run: |
+          for file in "dist-server/vela-server-$PLATKEY" "dist-server/vela-server-$PLATKEY.zip"; do
+            pnpm exec tauri signer sign "$file"
+            [ -f "$file.sig" ] || { echo "signing did not write $file.sig" >&2; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vela-server-${{ matrix.platkey }}
+          path: |
+            dist-server/vela-server-${{ matrix.platkey }}
+            dist-server/vela-server-${{ matrix.platkey }}.zip
+            dist-server/vela-server-${{ matrix.platkey }}.sig
+            dist-server/vela-server-${{ matrix.platkey }}.zip.sig
+          if-no-files-found: error

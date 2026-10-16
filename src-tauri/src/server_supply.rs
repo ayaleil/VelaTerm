@@ -1,5 +1,5 @@
-//! Client-side vela-server supply for GUI builds. Download the version/platform artifact from R2,
-//! verify its minisign signature and SHA-256, then cache it locally.
+//! Client-side vela-server supply for GUI builds. Download the version/platform artifact from the fork's GitHub
+//! release, verify its minisign signature and SHA-256, then cache it locally.
 //!
 //! Trust is rooted in the embedded minisign public key shared with automatic updates, not the manifest
 //! or network. Only signed artifacts enter the cache and they may be verified again before use.
@@ -18,18 +18,17 @@ use std::time::Duration;
 use base64::Engine;
 use serde::Deserialize;
 
-/// Distribution root shared with the updater.
-const DL_BASE: &str = "https://dl.velaterm.com";
+/// This fork's GitHub releases, which publish the vela-server artifacts and `server-manifest.json`.
+const RELEASES: &str = "https://github.com/eperfecto/VelaTerm/releases";
 
-/// Upstream's release key. The vela-server artifacts this module downloads from `DL_BASE` are published and
-/// signed by upstream, so verifying them keeps using upstream's key even in this fork. Tauri wraps the
-/// two-line minisign public-key file in base64.
-const SERVER_SUPPLY_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3QkY3RjE5NjU5NEIzN0YKUldSL3M1UmxHWCsvaDF4bkdReURmL2FLV2ZRbDU1V0xyRGV0dHZwQnBibWxPU3pGdXRjc2x4eCsK";
-
-/// This fork's updater key, which must match `plugins.updater.pubkey` in tauri.conf.json. Desktop updates are
-/// built and signed by this fork's release workflow, so they verify against this key and not upstream's.
-/// Update this constant whenever the fork's updater key rotates.
+/// This fork's signing key, which must match `plugins.updater.pubkey` in tauri.conf.json. The fork's release
+/// workflow signs both desktop updates and vela-server artifacts with it, so both verify against this key and
+/// not upstream's. Tauri wraps the two-line minisign public-key file in base64. Update this constant whenever
+/// the key rotates.
 const UPDATE_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg5NDZBNTRDRTU4NTdBNzkKUldSNWVvWGxUS1ZHaWFEaWJYQjRaY0VrOFpSakp0ODRSQW85WDI1OGo0VXRDaEZQTktzTm5uOU4K";
+
+/// The fork signs vela-server and desktop updates with one key.
+const SERVER_KEY: &str = UPDATE_PUBKEY_B64;
 
 /// server-manifest.json containing one `{url, sha256, signature}` entry per platform.
 #[derive(Debug, Deserialize)]
@@ -254,9 +253,9 @@ fn verify_with(key_b64: &str, data: &[u8], sig_b64: &str) -> Result<(), String> 
         .map_err(|e| format!("signature verification failed: {e}"))
 }
 
-/// Verify a vela-server artifact from the distribution root, which upstream signs.
+/// Verify a vela-server artifact from the fork's release, which the fork signs.
 pub fn verify_signature(data: &[u8], sig_b64: &str) -> Result<(), String> {
-    verify_with(SERVER_SUPPLY_PUBKEY_B64, data, sig_b64)
+    verify_with(SERVER_KEY, data, sig_b64)
 }
 
 /// Verify a desktop update package, which this fork's release workflow signs.
@@ -291,9 +290,22 @@ pub fn sha256_hex(data: &[u8]) -> String {
     d.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+fn manifest_url(version: &str) -> String {
+    format!("{RELEASES}/download/v{version}/server-manifest.json")
+}
+
+fn latest_manifest_url() -> String {
+    format!("{RELEASES}/latest/download/server-manifest.json")
+}
+
+fn parse_manifest_version(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    value["version"].as_str().map(str::to_string)
+}
+
 /// Fetch server-manifest.json for a version.
 pub fn fetch_manifest(version: &str) -> Result<ServerManifest, String> {
-    let url = format!("{DL_BASE}/server/{version}/server-manifest.json");
+    let url = manifest_url(version);
     let body = ureq::get(&url)
         .timeout(Duration::from_secs(30))
         .call()
@@ -303,21 +315,14 @@ pub fn fetch_manifest(version: &str) -> Result<ServerManifest, String> {
     serde_json::from_str(&body).map_err(|e| format!("failed to parse server manifest: {e}"))
 }
 
-/// Newest published vela-server version: `server/latest.json`, falling back to the desktop updater's root
-/// `latest.json` for releases published before the server pointer existed.
+/// Newest published vela-server version, read from the manifest attached to the fork's latest release.
 pub fn fetch_latest_version() -> Result<String, String> {
-    let read = |path: &str| -> Option<String> {
-        let body = ureq::get(&format!("{DL_BASE}/{path}"))
-            .timeout(Duration::from_secs(30))
-            .call()
-            .ok()?
-            .into_string()
-            .ok()?;
-        let value: serde_json::Value = serde_json::from_str(&body).ok()?;
-        value["version"].as_str().map(str::to_string)
-    };
-    read("server/latest.json")
-        .or_else(|| read("latest.json"))
+    ureq::get(&latest_manifest_url())
+        .timeout(Duration::from_secs(30))
+        .call()
+        .ok()
+        .and_then(|r| r.into_string().ok())
+        .and_then(|body| parse_manifest_version(&body))
         .ok_or_else(|| "cannot determine the latest vela-server version".to_string())
 }
 
@@ -481,6 +486,36 @@ mod tests {
     }
 
     #[test]
+    fn manifest_url_points_at_the_fork_release() {
+        assert_eq!(
+            manifest_url("0.2.15"),
+            "https://github.com/eperfecto/VelaTerm/releases/download/v0.2.15/server-manifest.json"
+        );
+    }
+
+    #[test]
+    fn latest_manifest_url_uses_the_latest_release() {
+        assert_eq!(
+            latest_manifest_url(),
+            "https://github.com/eperfecto/VelaTerm/releases/latest/download/server-manifest.json"
+        );
+    }
+
+    #[test]
+    fn latest_version_reads_the_manifest_version() {
+        assert_eq!(
+            parse_manifest_version(r#"{"version":"0.2.15","platforms":{}}"#).as_deref(),
+            Some("0.2.15")
+        );
+    }
+
+    #[test]
+    fn latest_version_rejects_missing_or_bad_json() {
+        assert_eq!(parse_manifest_version(r#"{"platforms":{}}"#), None);
+        assert_eq!(parse_manifest_version("not json"), None);
+    }
+
+    #[test]
     fn manifest_parses() {
         let json = r#"{"version":"0.1.73","pub_date":"x","platforms":{
             "linux-x86_64":{"url":"https://x/vela-server","sha256":"ab","signature":"c2ln"}}}"#;
@@ -560,26 +595,46 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Upstream's release key, kept only to guard against copying it into the fork's updater slot.
+    const UPSTREAM_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3QkY3RjE5NjU5NEIzN0YKUldSL3M1UmxHWCsvaDF4bkdReURmL2FLV2ZRbDU1V0xyRGV0dHZwQnBibWxPU3pGdXRjc2x4eCsK";
+
+    /// Test-only key pair: the private key was discarded after signing `PAYLOAD`.
+    const THROWAWAY_PUBKEY_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ3MDlBMEU1MDIwQzc3RDYKUldUV2R3d0M1YUFKUndWeTNoem5DRmZVSU0wUXFjdXRIU3NzcC81UEhYUnVSNUkvZjArYTNzY3UK";
+    const PAYLOAD: &[u8] = b"velaterm-test-01";
+    const THROWAWAY_SIG_B64: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUV2R3d0M1YUFKUnhFMmUxTFp4WTc2WWdZbWxIMnY4RXNHa2pmZkNiQ2lKVWdmVkZvQUdsK1JmOWU1OEpMbUh4UGNWbzA2akRPSWJlald0WHRtaDB2a0xyck83QXpMeHdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIwMjM4CWZpbGU6cGF5bG9hZC5iaW4KcmRpK1RwMW53dXJuUWRlNE5oYVBCTldWeWJHd1NadTJpV2VDdEpSL1FPbUgrTzBaVXdRQUJpcG1Qd2hiNm5HSFBMRDQwMWpCZG5ha0NKWkxPdnFNQWc9PQo=";
+
     #[test]
     fn builtin_public_keys_parse() {
-        // Ensure minisign-verify parses both embedded keys, catching base64 transcription errors.
-        assert!(
-            public_key(SERVER_SUPPLY_PUBKEY_B64).is_ok(),
-            "the vela-server supply key should parse"
-        );
+        // Ensure minisign-verify parses the embedded keys, catching base64 transcription errors.
         assert!(
             public_key(UPDATE_PUBKEY_B64).is_ok(),
             "the updater key should parse"
         );
+        assert!(
+            public_key(UPSTREAM_PUBKEY_B64).is_ok(),
+            "the upstream key should parse"
+        );
     }
 
     #[test]
-    fn the_two_builtin_keys_are_distinct() {
-        // A fork that copies upstream's key into both slots cannot sign its own updates, and the mistake is
-        // invisible until an update is rejected in the field.
+    fn upstream_key_is_not_the_fork_key() {
+        // A fork that copies upstream's key into the updater slot cannot sign its own updates, and the
+        // mistake is invisible until an update is rejected in the field.
         assert_ne!(
-            SERVER_SUPPLY_PUBKEY_B64, UPDATE_PUBKEY_B64,
+            UPSTREAM_PUBKEY_B64, UPDATE_PUBKEY_B64,
             "the updater key must be this fork's own, not upstream's"
         );
+    }
+
+    #[test]
+    fn server_artifacts_verify_with_the_fork_updater_key() {
+        assert_eq!(SERVER_KEY, UPDATE_PUBKEY_B64);
+    }
+
+    #[test]
+    fn foreign_signature_is_rejected() {
+        // Signed by a key that is not the fork's: verify_signature must refuse it.
+        assert!(verify_with(THROWAWAY_PUBKEY_B64, PAYLOAD, THROWAWAY_SIG_B64).is_ok());
+        assert!(verify_signature(PAYLOAD, THROWAWAY_SIG_B64).is_err());
     }
 }
