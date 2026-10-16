@@ -33,6 +33,8 @@ import {
   checkForUpdates,
   dismissUpdate,
   loadSkippedVersion,
+  restartApp,
+  startInstall,
   startUpdateSchedule,
   useUpdateState,
 } from "./updater";
@@ -247,6 +249,56 @@ describe("a check while a prompt is already pending", () => {
 
     expect(result.current.prompt).toBeNull();
     expect(stale.close).toHaveBeenCalledOnce();
+  });
+});
+
+describe("relaunch marker around installs and restarts", () => {
+  function invokeOrder(cmd: string): number {
+    const index = invoke.mock.calls.findIndex(([name]) => name === cmd);
+    return invoke.mock.invocationCallOrder[index];
+  }
+
+  async function promptFor(version: string) {
+    const update = fakeUpdate(version);
+    check.mockResolvedValueOnce(update);
+    await act(() => checkForUpdates({ manual: false }));
+    return update;
+  }
+
+  it("marks an internal relaunch before installing so the next start skips the launcher", async () => {
+    const update = await promptFor("0.2.0");
+
+    await act(() => startInstall());
+
+    expect(invoke).toHaveBeenCalledWith("mark_internal_relaunch");
+    expect(invokeOrder("mark_internal_relaunch")).toBeLessThan(
+      update.downloadAndInstall.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("clears the relaunch marker when installation fails", async () => {
+    const update = await promptFor("0.2.0");
+    update.downloadAndInstall.mockRejectedValueOnce(new Error("boom"));
+
+    await act(() => startInstall());
+
+    expect(invoke).toHaveBeenCalledWith("clear_internal_relaunch");
+  });
+
+  it("still installs when the marker cannot be written", async () => {
+    const update = await promptFor("0.2.0");
+    invoke.mockRejectedValue(new Error("no data dir"));
+
+    await act(() => startInstall());
+
+    expect(update.downloadAndInstall).toHaveBeenCalledOnce();
+  });
+
+  it("marks an internal relaunch before restarting", async () => {
+    await restartApp();
+
+    expect(invoke).toHaveBeenCalledWith("mark_internal_relaunch");
+    expect(invokeOrder("mark_internal_relaunch")).toBeLessThan(relaunch.mock.invocationCallOrder[0]);
   });
 });
 

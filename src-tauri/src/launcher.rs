@@ -3,7 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{
+    AppHandle, Emitter, LogicalSize, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+};
 
 use crate::main_window::MAIN_LABEL;
 
@@ -115,6 +117,72 @@ pub(crate) fn main_visible(app: &AppHandle) -> bool {
         .map_or(true, |win| win.is_visible().unwrap_or(true))
 }
 
+const LAUNCHER_WIDTH: f64 = 480.0;
+const LAUNCHER_HEIGHT: f64 = 320.0;
+const LAUNCHER_EXPANDED_HEIGHT: f64 = 600.0;
+
+pub(crate) fn launcher_height(expanded: bool) -> f64 {
+    if expanded {
+        LAUNCHER_EXPANDED_HEIGHT
+    } else {
+        LAUNCHER_HEIGHT
+    }
+}
+
+pub(crate) fn open_launcher(app: &AppHandle) -> tauri::Result<()> {
+    let win = WebviewWindowBuilder::new(app, LAUNCHER_LABEL, WebviewUrl::App("index.html".into()))
+        .title("VelaTerm")
+        .inner_size(LAUNCHER_WIDTH, LAUNCHER_HEIGHT)
+        .resizable(false)
+        .maximizable(false)
+        .center()
+        .theme(crate::native_theme(app))
+        .initialization_script("window.__VLX_LAUNCHER__=true;")
+        .disable_drag_drop_handler()
+        .build()?;
+    // Programmatic closes use destroy(), which skips CloseRequested, so this only sees the user's X.
+    let handle = app.clone();
+    win.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            quit_without_prompt(&handle);
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn launcher_choose_local(app: AppHandle) {
+    reveal_main(&app);
+    if let Some(win) = app.get_webview_window(LAUNCHER_LABEL) {
+        let _ = win.destroy();
+    }
+}
+
+#[tauri::command]
+pub fn launcher_resize(window: WebviewWindow, expanded: bool) -> Result<(), String> {
+    if window.label() != LAUNCHER_LABEL {
+        return Err("launcher_resize is only available to the launcher window".into());
+    }
+    window
+        .set_size(LogicalSize::new(LAUNCHER_WIDTH, launcher_height(expanded)))
+        .map_err(|e| e.to_string())?;
+    window.center().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn mark_internal_relaunch(app: AppHandle) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    write_relaunch_marker(&dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn clear_internal_relaunch(app: AppHandle) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    clear_relaunch_marker(&dir);
+    Ok(())
+}
+
 const QUIT_SILENT_WATCHDOG: Duration = Duration::from_millis(3000);
 
 /// Quit while main is hidden: main's webview still saves the workspace per the remembered preference and then
@@ -175,6 +243,12 @@ mod tests {
         assert!(!consume_relaunch_marker(&dir, now + RELAUNCH_MARKER_TTL + Duration::from_secs(1)));
         assert!(!dir.join(RELAUNCH_MARKER).exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn launcher_grows_only_for_the_expanded_form() {
+        assert_eq!(launcher_height(false), 320.0);
+        assert_eq!(launcher_height(true), 600.0);
     }
 
     #[test]

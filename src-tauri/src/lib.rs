@@ -895,10 +895,23 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
             app.manage(db);
             screenshot::init(app.handle());
 
+            let has_open_project = app.state::<PendingOpenProject>().0.lock().unwrap().is_some();
+            let show_launcher = launcher::should_show_launcher(
+                has_open_project,
+                launcher::consume_relaunch_marker(&data_dir, std::time::SystemTime::now()),
+            );
             if let Some(win) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
                 apply_window_frame(&win, frame_is_dark);
-                let _ = win.show();
+                // Main stays hidden behind the launcher but still loads fully; a failed launcher must never
+                // leave the app with no visible window.
+                let launcher_opened = show_launcher
+                    && launcher::open_launcher(app.handle())
+                        .map_err(|e| crate::diagnostic_warn!("failed to open launcher window: {e}"))
+                        .is_ok();
+                if !launcher_opened {
+                    let _ = win.show();
+                }
             }
 
             // Extract bundled terminal commands into data_dir/bin, which PTY sessions prepend to PATH.
@@ -1304,6 +1317,11 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
             screenshot::screenshot_close,
             screenshot::screenshot_copy,
             screenshot::screenshot_save,
+            // Startup launcher window and the updater's skip-once relaunch marker.
+            launcher::launcher_choose_local,
+            launcher::launcher_resize,
+            launcher::mark_internal_relaunch,
+            launcher::clear_internal_relaunch,
             // 7) macOS native notifications invoked directly from notify.ts.
             native_notify,
             native_notify_auth_status,
