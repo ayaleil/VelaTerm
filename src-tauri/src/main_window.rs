@@ -99,7 +99,8 @@ mod tests {
 // Tauri's mock runtime needs the `native-menu-tests` feature:
 // cargo test --manifest-path src-tauri/Cargo.toml --features native-menu-tests main_window
 // Its windows report `is_visible() == true` unconditionally, so these tests cover the decisions against real
-// registered windows; the hide/show effect itself is not observable there.
+// registered windows; the hide/show effect itself is not observable there. `destroy()` does not unregister a
+// window in the mock either, so launcher tests assert the closure the helpers report.
 #[cfg(all(test, feature = "native-menu-tests"))]
 mod behavior_tests {
     use super::*;
@@ -120,6 +121,86 @@ mod behavior_tests {
 
         let _ssh = window(app.handle(), "ssh-1a2b3c4d");
         assert!(hide_main_for_remote(app.handle()));
+    }
+
+    fn launcher_app() -> tauri::App<tauri::test::MockRuntime> {
+        let app = tauri::test::mock_app();
+        app.manage(crate::launcher::LauncherState::default());
+        app.manage(crate::QuitState::default());
+        app
+    }
+
+    #[test]
+    fn main_returns_only_after_the_last_remote_window_closes() {
+        let app = launcher_app();
+        let h = app.handle();
+        let _main = window(h, MAIN_LABEL);
+        let ssh = window(h, "ssh-1a2b3c4d");
+        // Tauri may still list the destroyed window; the decision excludes it explicitly.
+        assert!(crate::launcher::offers_return(h, ssh.label(), false));
+        // A visible main window needs no prompt.
+        assert!(!crate::launcher::offers_return(h, ssh.label(), true));
+        // A non-remote window never offers the prompt.
+        let _dl = window(h, "download-remote-test");
+        assert!(!crate::launcher::offers_return(h, "download-remote-test", false));
+        assert!(!crate::launcher::offers_return(h, MAIN_LABEL, false));
+        // Another remote window is still open.
+        let _other = window(h, "account-remote-3");
+        assert!(!crate::launcher::offers_return(h, ssh.label(), false));
+    }
+
+    #[test]
+    fn no_return_prompt_while_the_app_is_exiting() {
+        use std::sync::atomic::Ordering;
+        let app = launcher_app();
+        let h = app.handle();
+        let _main = window(h, MAIN_LABEL);
+        let ssh = window(h, "ssh-1a2b3c4d");
+        h.state::<crate::QuitState>().confirmed.store(true, Ordering::SeqCst);
+        assert!(!crate::launcher::offers_return(h, ssh.label(), false));
+
+        let app = launcher_app();
+        let h = app.handle();
+        let ssh = window(h, "ssh-1a2b3c4d");
+        h.state::<crate::launcher::LauncherState>().exiting.store(true, Ordering::SeqCst);
+        assert!(!crate::launcher::offers_return(h, ssh.label(), false));
+    }
+
+    #[test]
+    fn missing_main_window_counts_as_visible() {
+        let app = launcher_app();
+        assert!(crate::launcher::main_visible(app.handle()));
+        let _main = window(app.handle(), MAIN_LABEL);
+        assert!(crate::launcher::main_visible(app.handle()));
+    }
+
+    #[test]
+    fn choosing_local_raises_main_and_closes_the_launcher() {
+        let app = launcher_app();
+        let h = app.handle();
+        let _main = window(h, MAIN_LABEL);
+        let _launcher = window(h, crate::launcher::LAUNCHER_LABEL);
+        assert!(crate::launcher::leave_launcher_for_main(h));
+        assert!(crate::launcher::main_visible(h));
+    }
+
+    #[test]
+    fn ssh_window_opened_from_the_launcher_closes_it() {
+        let app = launcher_app();
+        let h = app.handle();
+        let _main = window(h, MAIN_LABEL);
+        let _launcher = window(h, crate::launcher::LAUNCHER_LABEL);
+        let ssh = window(h, "ssh-1a2b3c4d");
+        assert!(crate::launcher::on_ssh_window_opened(h, crate::launcher::LAUNCHER_LABEL, ssh.label()));
+    }
+
+    #[test]
+    fn ssh_window_opened_from_another_remote_window_closes_nothing() {
+        let app = launcher_app();
+        let h = app.handle();
+        let _launcher = window(h, crate::launcher::LAUNCHER_LABEL);
+        let ssh = window(h, "ssh-1a2b3c4d");
+        assert!(!crate::launcher::on_ssh_window_opened(h, "remote-1a2b3c4d", ssh.label()));
     }
 
     #[test]

@@ -4,7 +4,8 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent,
 };
 
 use crate::main_window::MAIN_LABEL;
@@ -100,7 +101,7 @@ pub(crate) struct LauncherState {
     pub copy: Mutex<HiddenModeCopy>,
 }
 
-fn raise(app: &AppHandle, label: &str) {
+fn raise<R: Runtime>(app: &AppHandle<R>, label: &str) {
     if let Some(win) = app.get_webview_window(label) {
         let _ = win.unminimize();
         let _ = win.show();
@@ -108,34 +109,36 @@ fn raise(app: &AppHandle, label: &str) {
     }
 }
 
-pub(crate) fn reveal_main(app: &AppHandle) {
+pub(crate) fn reveal_main<R: Runtime>(app: &AppHandle<R>) {
     raise(app, MAIN_LABEL);
 }
 
-pub(crate) fn hide_main(app: &AppHandle) {
+pub(crate) fn hide_main<R: Runtime>(app: &AppHandle<R>) {
     if let Some(win) = app.get_webview_window(MAIN_LABEL) {
         let _ = win.hide();
     }
 }
 
-pub(crate) fn main_visible(app: &AppHandle) -> bool {
+pub(crate) fn main_visible<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.get_webview_window(MAIN_LABEL)
         .map_or(true, |win| win.is_visible().unwrap_or(true))
 }
 
+fn close_launcher<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.get_webview_window(LAUNCHER_LABEL)
+        .is_some_and(|win| win.destroy().is_ok())
+}
+
 /// Called on the main thread right after an SSH window opens. The dialog is non-blocking so the
-/// pending `ssh_connect` can return while the user decides.
-pub(crate) fn on_ssh_window_opened(app: &AppHandle, caller: &str, ssh_label: &str) {
+/// pending `ssh_connect` can return while the user decides. Returns whether the launcher was closed.
+pub(crate) fn on_ssh_window_opened<R: Runtime>(app: &AppHandle<R>, caller: &str, ssh_label: &str) -> bool {
     if caller == LAUNCHER_LABEL {
-        if let Some(win) = app.get_webview_window(LAUNCHER_LABEL) {
-            let _ = win.destroy();
-        }
-        return;
+        return close_launcher(app);
     }
     if caller != MAIN_LABEL || !main_visible(app) {
-        return;
+        return false;
     }
-    let Some(ssh_window) = app.get_webview_window(ssh_label) else { return };
+    let Some(ssh_window) = app.get_webview_window(ssh_label) else { return false };
     let copy = app.state::<LauncherState>().copy.lock().unwrap().clone();
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
     let handle = app.clone();
@@ -150,6 +153,7 @@ pub(crate) fn on_ssh_window_opened(app: &AppHandle, caller: &str, ssh_label: &st
                 hide_main(&handle);
             }
         });
+    false
 }
 
 pub(crate) fn push_focus(order: &mut Vec<String>, label: &str) {
@@ -188,21 +192,27 @@ pub(crate) fn focus_preferred(app: &AppHandle) {
     }
 }
 
+/// Whether destroying `destroyed` should offer to return to the hidden main window or quit. Tauri may still
+/// list the destroyed window, so it is excluded explicitly.
+pub(crate) fn offers_return<R: Runtime>(app: &AppHandle<R>, destroyed: &str, main_shown: bool) -> bool {
+    if !is_remote_label(destroyed) {
+        return false;
+    }
+    let exiting = app.state::<LauncherState>().exiting.load(Ordering::SeqCst)
+        || app.state::<crate::QuitState>().confirmed.load(Ordering::SeqCst);
+    let labels: Vec<String> = app.webview_windows().into_keys().collect();
+    let remaining = remote_count_excluding(labels.iter().map(String::as_str), destroyed);
+    should_offer_return(remaining, main_shown, exiting)
+}
+
 /// Runs on the event-loop thread, so the dialog must stay non-blocking.
 pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
     let state = app.state::<LauncherState>();
     forget_focus(&mut state.focus_order.lock().unwrap(), label);
-    if !is_remote_label(label) {
-        return;
-    }
-    let exiting = state.exiting.load(Ordering::SeqCst)
-        || app.state::<crate::QuitState>().confirmed.load(Ordering::SeqCst);
-    let labels: Vec<String> = app.webview_windows().into_keys().collect();
-    let remaining = remote_count_excluding(labels.iter().map(String::as_str), label);
     let main_shown = app
         .get_webview_window(MAIN_LABEL)
         .map_or(true, |win| win.is_visible().unwrap_or(false));
-    if !should_offer_return(remaining, main_shown, exiting) {
+    if !offers_return(app, label, main_shown) {
         return;
     }
     let copy = state.copy.lock().unwrap().clone();
@@ -222,11 +232,10 @@ pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
 }
 
 /// A project open request skips the launcher, including one that arrives while the launcher is already up.
-pub(crate) fn leave_launcher_for_main(app: &AppHandle) {
+/// Returns whether the launcher was closed.
+pub(crate) fn leave_launcher_for_main<R: Runtime>(app: &AppHandle<R>) -> bool {
     reveal_main(app);
-    if let Some(win) = app.get_webview_window(LAUNCHER_LABEL) {
-        let _ = win.destroy();
-    }
+    close_launcher(app)
 }
 
 #[tauri::command]
