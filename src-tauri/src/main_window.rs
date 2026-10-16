@@ -167,6 +167,18 @@ mod behavior_tests {
     }
 
     #[test]
+    fn no_return_prompt_while_the_launcher_is_open() {
+        // A connect from the launcher whose window failed to open destroys the half-built window; the
+        // launcher is still there for the user, so there is nothing to return to.
+        let app = launcher_app();
+        let h = app.handle();
+        let _main = window(h, MAIN_LABEL);
+        let _launcher = window(h, crate::launcher::LAUNCHER_LABEL);
+        let ssh = window(h, "ssh-1a2b3c4d");
+        assert!(!crate::launcher::offers_return(h, ssh.label(), false));
+    }
+
+    #[test]
     fn missing_main_window_counts_as_visible() {
         let app = launcher_app();
         assert!(crate::launcher::main_visible(app.handle()));

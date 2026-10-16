@@ -1154,11 +1154,12 @@ pub async fn ssh_connect(
         );
     }
     let app2 = app.clone();
+    let host_win = host.clone();
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
-    app.run_on_main_thread(move || {
+    let scheduled = app.run_on_main_thread(move || {
         let opened = open_login_window(
             &app2,
-            &host,
+            &host_win,
             &r.session,
             r.local_port,
             &r.password,
@@ -1176,10 +1177,18 @@ pub async fn ssh_connect(
             }
         };
         let _ = tx.send(outcome);
-    })
-    .map_err(|e| format!("failed to schedule window open on main thread: {e}"))?;
-    rx.await
-        .map_err(|_| "window open task was dropped".to_string())??;
+    });
+    let opened = match scheduled {
+        Ok(()) => rx
+            .await
+            .unwrap_or_else(|_| Err("window open task was dropped".to_string())),
+        Err(e) => Err(format!("failed to schedule window open on main thread: {e}")),
+    };
+    if let Err(e) = opened {
+        // The tunnel, forwards and watcher are already up and no window exists to close them later.
+        ssh_disconnect(host, session, false).await;
+        return Err(e);
+    }
     Ok(session)
 }
 
@@ -1387,7 +1396,11 @@ fn open_login_window(
     });
 
     crate::window_layout::apply(&win);
-    win.show().map_err(|e| format!("Failed to show {} window: {e}", kind.name()))?;
+    if let Err(e) = win.show() {
+        // A hidden half-built window would still count as a live remote window.
+        let _ = win.destroy();
+        return Err(format!("Failed to show {} window: {e}", kind.name()));
+    }
     let _ = win.set_focus();
     Ok(label)
 }

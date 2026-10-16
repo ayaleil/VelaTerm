@@ -202,7 +202,8 @@ pub(crate) mod focus {
 /// Whether destroying `destroyed` should offer to return to the hidden main window or quit. Tauri may still
 /// list the destroyed window, so it is excluded explicitly.
 pub(crate) fn offers_return<R: Runtime>(app: &AppHandle<R>, destroyed: &str, main_shown: bool) -> bool {
-    if !is_remote_label(destroyed) {
+    // An open launcher is a visible window the user can still act on.
+    if !is_remote_label(destroyed) || app.get_webview_window(LAUNCHER_LABEL).is_some() {
         return false;
     }
     let exiting = app.state::<LauncherState>().exiting.load(Ordering::SeqCst)
