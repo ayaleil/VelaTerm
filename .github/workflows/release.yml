@@ -102,7 +102,9 @@ jobs:
   windows-nsis:
     name: windows installer (Tauri, ${{ matrix.variant }} Git Bash)
     runs-on: windows-latest
+    # One variant failing should not cancel the other's build; publish still needs both to succeed.
     strategy:
+      fail-fast: false
       matrix:
         variant: [min, full]
     steps:
@@ -140,15 +142,25 @@ jobs:
 
       # Both variants come out with the same file names, which would collide in the release, so they are
       # renamed after upstream's assets. Each `.sig` follows its artifact: the updater manifest pairs them by name.
+      # With createUpdaterArtifacts and every bundle target enabled, Tauri signs the MSI as well as the NSIS
+      # installer, so a missing signature on either means signing broke and fails the job.
       - name: Name the installers after the variant
         shell: bash
         env:
           VARIANT: ${{ matrix.variant }}
         run: |
-          move_with_sig() { mv "$1" "$2" && { [ ! -f "$1.sig" ] || mv "$1.sig" "$2.sig"; }; }
+          move_with_sig() {
+            local matches=("$1"/*"$2")
+            if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
+              echo "expected exactly one *$2 in $1, found: ${matches[*]}" >&2; exit 1
+            fi
+            [ -f "${matches[0]}.sig" ] || { echo "${matches[0]} has no .sig; was signing enabled?" >&2; exit 1; }
+            mv "${matches[0]}" "$1/$3"
+            mv "${matches[0]}.sig" "$1/$3.sig"
+          }
           bundle=src-tauri/target/release/bundle
-          move_with_sig "$(ls "$bundle"/nsis/*-setup.exe)" "$bundle/nsis/velaterm-x64-$VARIANT-setup.exe"
-          move_with_sig "$(ls "$bundle"/msi/*.msi)" "$bundle/msi/velaterm-x64-$VARIANT.msi"
+          move_with_sig "$bundle/nsis" -setup.exe "velaterm-x64-$VARIANT-setup.exe"
+          move_with_sig "$bundle/msi" .msi "velaterm-x64-$VARIANT.msi"
 
       - uses: actions/upload-artifact@v7
         with:
