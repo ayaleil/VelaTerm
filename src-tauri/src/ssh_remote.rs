@@ -2362,7 +2362,7 @@ fn connect_inner(
 
     progress("supply", None);
     let platkey = crate::server_supply::platform_key(&sys.os, &sys.arch);
-    // Use a verified local cache or download/verify from R2. VLX_DEV_SERVER_BIN bypasses publication for
+    // Use a verified local cache or download/verify from the fork's GitHub release. VLX_DEV_SERVER_BIN bypasses publication for
     // development-only end-to-end testing.
     // A `.zip` override is unpacked locally and exercises the zip upload path.
     let supplied = match std::env::var("VLX_DEV_SERVER_BIN") {

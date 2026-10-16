@@ -1,7 +1,7 @@
 # Builds vela-server, the headless backend the desktop client provisions onto SSH hosts, for every platform
 # the client can connect to.
 #
-# Reusable: release.yml calls it with sign: true and `secrets: inherit`, and the PR check calls it with
+# Reusable: release.yml calls it with sign on tags and explicit secrets, and the PR check calls it with
 # sign: false, which needs no secrets. Each platform uploads an artifact named vela-server-<platkey> holding the
 # binary and its zip, plus a `.sig` beside each when signed; server-manifest.py turns those into the manifest.
 name: vela-server
@@ -75,7 +75,7 @@ jobs:
 
       - name: Install cargo-zigbuild
         if: runner.os == 'Linux'
-        run: python -m pip install cargo-zigbuild ziglang
+        run: python -m pip install cargo-zigbuild==0.23.4 ziglang==0.16.0
 
       - run: pnpm install --frozen-lockfile
 

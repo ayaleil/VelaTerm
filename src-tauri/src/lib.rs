@@ -55,7 +55,7 @@ mod native_drop;
 mod stall;
 #[cfg(feature = "gui")]
 mod screenshot;
-// vela-server provisioning: R2 download, minisign verification, and cache. The GUI provisions remote hosts with
+// vela-server provisioning: download from the fork's GitHub release, minisign verification, and cache. The GUI provisions remote hosts with
 // it; the headless build only uses the manifest and signature checks for `vela-server update`.
 #[cfg_attr(not(feature = "gui"), allow(dead_code))]
 mod server_supply;
