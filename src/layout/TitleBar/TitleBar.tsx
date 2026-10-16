@@ -14,6 +14,7 @@ import { screenshotShortcutGet, screenshotStart, type ScreenshotShortcutStatus }
 import { formatAccelerator } from "../../screenshot/accelerator";
 import { webServerStatus, type WebServerStatus } from "../../ipc/webServer";
 import { env, platform } from "../../platform";
+import { FullscreenToggle } from "../../components/FullscreenToggle";
 import { useTermStore } from "../../store/termStore";
 import { runAfterInitialSettings } from "../../store/settingsWatch";
 import { navigateTranslation, translationUrl, useTranslationRoute } from "../../translation/navigation";
@@ -479,6 +480,8 @@ export function TitleBar() {
           <Icons.sun size={14} />
         </button>
       </div>
+
+      <FullscreenToggle className="tb-btn" />
 
       {/* Remote access appears in Tauri/Electron desktop, whose sidecars can start a LAN instance.
           Browser clients are already remote. The button lights while the service runs. */}

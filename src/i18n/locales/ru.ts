@@ -437,6 +437,8 @@ const ru: typeof en = {
   "titlebar.themeDark": "Тёмная", // Dark
   "titlebar.themeClassicDark": "Классическая тёмная", // Classic Dark
   "titlebar.themeLight": "Светлая", // Light
+  "titlebar.enterFullscreen": "Во весь экран", // Enter full screen
+  "titlebar.exitFullscreen": "Выйти из полноэкранного режима", // Exit full screen
   "titlebar.gameCenter": "Игровой центр",
   "titlebar.browser": "Встроенный браузер", // Built-in Browser
   "titlebar.remoteAccess": "Удалённый доступ (браузер)", // Remote Access (Browser)

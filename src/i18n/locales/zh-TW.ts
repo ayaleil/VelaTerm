@@ -427,6 +427,8 @@ const zhTW: typeof en = {
   "titlebar.themeDark": "深色", // Dark
   "titlebar.themeClassicDark": "經典深色", // Classic Dark
   "titlebar.themeLight": "淺色", // Light
+  "titlebar.enterFullscreen": "進入全螢幕", // Enter full screen
+  "titlebar.exitFullscreen": "結束全螢幕", // Exit full screen
   "titlebar.gameCenter": "遊戲中心",
   "titlebar.browser": "內建瀏覽器", // Built-in Browser
   "titlebar.remoteAccess": "遠端存取（瀏覽器）", // Remote Access (Browser)

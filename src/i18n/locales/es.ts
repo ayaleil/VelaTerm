@@ -428,6 +428,8 @@ const es: typeof en = {
   "titlebar.themeDark": "Oscuro", // Dark
   "titlebar.themeClassicDark": "Oscuro clásico", // Classic Dark
   "titlebar.themeLight": "Claro", // Light
+  "titlebar.enterFullscreen": "Entrar en pantalla completa", // Enter full screen
+  "titlebar.exitFullscreen": "Salir de pantalla completa", // Exit full screen
   "titlebar.gameCenter": "Centro de juegos",
   "titlebar.browser": "Navegador integrado", // Built-in Browser
   "titlebar.remoteAccess": "Acceso remoto (navegador)", // Remote Access (Browser)

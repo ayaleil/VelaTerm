@@ -347,6 +347,7 @@
 .m-row-kind{font-size:13px}.m-empty,.m-nomatch{font-size:16px;line-height:1.8;padding:40px 20px}
 .m-load-status,.m-load-error{margin:16px;padding:20px;border:1px solid var(--border);border-radius:var(--r-md);line-height:1.7;font-size:16px}
 .m-load-error p{margin:0 0 16px;overflow-wrap:anywhere}.m-load-error button{min-height:44px;padding:8px 20px;border-radius:var(--r-md);background:var(--bg-active)}
+.m-fullscreen{flex:none;display:grid;place-items:center;min-width:44px;min-height:44px;color:var(--text-mid);border:1px solid var(--border);border-radius:var(--r-md);touch-action:manipulation}
 .m-menu{position:relative;flex:none}.m-menu summary{list-style:none;display:grid;place-items:center;min-width:44px;min-height:44px;cursor:pointer;border:1px solid var(--border);border-radius:var(--r-md)}
 .m-menu summary::-webkit-details-marker{display:none}.m-menu-items{position:absolute;right:0;top:calc(100% + 8px);z-index:20;min-width:180px;padding:8px;display:flex;flex-direction:column;gap:8px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 6px 24px #0003}
 .m-menu-items button{min-height:44px;text-align:left;padding:10px 14px;font-size:16px;border-radius:var(--r-sm)}

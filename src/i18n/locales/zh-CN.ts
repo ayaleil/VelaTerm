@@ -426,6 +426,8 @@ const zhCN: typeof en = {
   "titlebar.themeDark": "暗色",
   "titlebar.themeClassicDark": "经典暗色",
   "titlebar.themeLight": "亮色",
+  "titlebar.enterFullscreen": "进入全屏",
+  "titlebar.exitFullscreen": "退出全屏",
   "titlebar.gameCenter": "游戏中心",
   "titlebar.browser": "内置浏览器",
   "titlebar.remoteAccess": "远程访问（浏览器）",

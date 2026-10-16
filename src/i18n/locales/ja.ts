@@ -427,6 +427,8 @@ const ja: typeof en = {
   "titlebar.themeDark": "ダーク", // Dark
   "titlebar.themeClassicDark": "クラシックダーク", // Classic Dark
   "titlebar.themeLight": "ライト", // Light
+  "titlebar.enterFullscreen": "全画面表示にする", // Enter full screen
+  "titlebar.exitFullscreen": "全画面表示を終了", // Exit full screen
   "titlebar.gameCenter": "ゲームセンター",
   "titlebar.browser": "内蔵ブラウザ", // Built-in Browser
   "titlebar.remoteAccess": "リモートアクセス（ブラウザ）", // Remote Access (Browser)

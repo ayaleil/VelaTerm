@@ -426,6 +426,8 @@ const en = {
   "titlebar.themeDark": "Dark",
   "titlebar.themeClassicDark": "Classic Dark",
   "titlebar.themeLight": "Light",
+  "titlebar.enterFullscreen": "Enter full screen",
+  "titlebar.exitFullscreen": "Exit full screen",
   "titlebar.gameCenter": "Game Center",
   "titlebar.browser": "Built-in Browser",
   "titlebar.remoteAccess": "Remote Access (Browser)",

@@ -427,6 +427,8 @@ const ko: typeof en = {
   "titlebar.themeDark": "다크", // Dark
   "titlebar.themeClassicDark": "클래식 다크", // Classic Dark
   "titlebar.themeLight": "라이트", // Light
+  "titlebar.enterFullscreen": "전체 화면으로 전환", // Enter full screen
+  "titlebar.exitFullscreen": "전체 화면 종료", // Exit full screen
   "titlebar.gameCenter": "게임 센터",
   "titlebar.browser": "내장 브라우저", // Built-in Browser
   "titlebar.remoteAccess": "원격 접속 (브라우저)", // Remote Access (Browser)
