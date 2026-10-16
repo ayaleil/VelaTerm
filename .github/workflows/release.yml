@@ -212,19 +212,36 @@ jobs:
             src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error
 
+  # The headless backend the desktop client provisions onto SSH hosts. Signed here because the client verifies
+  # it against the updater public key before running it; the reusable workflow holds the build matrix.
+  vela-server:
+    name: vela-server
+    uses: ./.github/workflows/vela-server.yml
+    with:
+      sign: true
+    secrets: inherit
+
   publish:
     name: attach artifacts to the release
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux-appimage, windows-nsis, macos-dmg]
+    needs: [linux-appimage, windows-nsis, macos-dmg, vela-server]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
+      # Named explicitly so the vela-server artifacts stay out of the directory updater-manifest.py scans.
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: "{linux-appimage,windows-nsis-*,macos-dmg}"
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: vela-server
+          pattern: vela-server-*
           merge-multiple: true
 
       # The Tauri updater reads one manifest covering every platform, so it can only be assembled once all
@@ -238,6 +255,15 @@ jobs:
             > artifacts/latest.json
           cat artifacts/latest.json
 
+      # The client requests the server by CARGO_PKG_VERSION, which has no leading `v`, so the manifest's
+      # version is the tag without it. The script exits non-zero if any platform, binary, zip or .sig is missing.
+      - name: Write the vela-server manifest
+        run: |
+          python3 -I .github/scripts/server-manifest.py --dir vela-server \
+            --repo "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --version "${GITHUB_REF_NAME#v}" --out vela-server/server-manifest.json
+          cat vela-server/server-manifest.json
+
       - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -248,7 +274,7 @@ jobs:
           # Not artifacts/*: merge-multiple flattens the artifacts into one directory but keeps the folder
           # structure inside each, so the Tauri bundles arrive under dmg/, macos/, nsis/ and msi/, and gh
           # refuses a directory with "is a directory". Assets are uploaded by basename either way.
-          find artifacts -type f -print0 | xargs -0 gh release upload "$tag" --clobber
+          find artifacts vela-server -type f -print0 | xargs -0 gh release upload "$tag" --clobber
           # Deleting the tag of a published release makes GitHub demote that release to a draft, and a moved
           # tag is exactly what re-running a failed release looks like. `gh release view` still finds a draft,
           # so the create above is skipped and the assets land on a release nobody can download. Drafts are

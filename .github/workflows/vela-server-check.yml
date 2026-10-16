@@ -1,0 +1,19 @@
+# Builds vela-server unsigned on pull requests that can affect it, so a break shows up before a release tag does.
+name: vela-server check
+
+on:
+  pull_request:
+    paths:
+      - src-tauri/**
+      - src/**
+      - scripts/build-vela-server.sh
+      - .github/workflows/vela-server*.yml
+
+permissions:
+  contents: read
+
+jobs:
+  vela-server:
+    uses: ./.github/workflows/vela-server.yml
+    with:
+      sign: false
