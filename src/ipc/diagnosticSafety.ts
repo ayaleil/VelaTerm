@@ -121,6 +121,7 @@ const commands = new Set([
   "git_merge_preview",
   "git_open_pull_request",
   "git_pr_provider",
+  "git_repo_web_url",
   "git_pull",
   "git_push",
   "git_range_file_diff",

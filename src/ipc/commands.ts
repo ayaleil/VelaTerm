@@ -808,6 +808,11 @@ export function gitPrProvider(cwd: string): Promise<GitPrProvider> {
   return invoke<GitPrProvider>("git_pr_provider", { cwd });
 }
 
+/** Web page of the repository's `origin` (any provider); null when there is no network remote. */
+export function gitRepoWebUrl(cwd: string): Promise<string | null> {
+  return invoke<string | null>("git_repo_web_url", { cwd });
+}
+
 /** Result of opening a pull request: its URL (empty when the server gave none) and a message. */
 export interface PrOutcome {
   url: string;

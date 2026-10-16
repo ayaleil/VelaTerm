@@ -1046,6 +1046,8 @@ const zhTW: typeof en = {
   "tree.sessionInfo": "會話資訊", // Session Info
   "tree.groupInfo": "分組資訊", // Group Info
   "tree.collectionInfo": "集合資訊", // Collection Info
+  "tree.openRepository": "開啟儲存庫", // Open Repository
+  "tree.openRepositoryNoRemote": "此專案的 Git 儲存庫沒有網頁位址：請新增指向伺服器的 origin 遠端。", // No web address for origin
   "tree.projectInfo": "專案資訊", // Project Info
   "info.branch": "分支", // Branch
   "info.path": "路徑", // Path

@@ -7,6 +7,7 @@ import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
 import Icons from "../../components/Icons";
 import { useT } from "../../i18n";
 import { env, platform } from "../../platform";
+import { gitRepoWebUrl } from "../../ipc/commands";
 import { knowledgeUrl } from "../Knowledge/navigation";
 import { securityUrl } from "../Security/navigation";
 import { securityText } from "../Security/text";
@@ -15,7 +16,7 @@ import {
   type SidebarTreeView,
   useTermStore,
 } from "../../store/termStore";
-import { isWorktreeGone } from "../../hooks/useGitBranch";
+import { isWorktreeGone, peekGitBranchInfo, prefetchGitBranchInfo } from "../../hooks/useGitBranch";
 import {
   collectionNameTaken,
   countByAgentState,
@@ -685,6 +686,27 @@ export function LeftSidebar() {
     const sep: MenuItem = { label: "", separator: true };
     const rename: MenuItem = { label: t("common.rename"), onClick: () => startRename(node) };
 
+    // Open Repository loads origin's web page (pull requests, workflows, issues) in a browser tab. It needs a native
+    // child WebView, like New Browser Page, and appears once the folder is known to be a Git repository.
+    const openRepositoryItems = (root: string | null): MenuItem[] => {
+      if (!root || !(env.isTauri || env.isElectron)) return [];
+      const info = peekGitBranchInfo(root);
+      if (info === undefined) prefetchGitBranchInfo(root);
+      if (!info?.isRepo) return [];
+      return [{
+        label: t("tree.openRepository"),
+        icon: <Icons.globe size={14} />,
+        onClick: () => {
+          void gitRepoWebUrl(root)
+            .then((url) => {
+              if (url) useTermStore.getState().openBrowserTab(url);
+              else useTermStore.setState({ treeMutationError: t("tree.openRepositoryNoRemote") });
+            })
+            .catch((error) => useTermStore.setState({ treeMutationError: error instanceof Error ? error.message : String(error) }));
+        },
+      }];
+    };
+
     if (node.kind === "project") {
       const st = useTermStore.getState();
       const project = st.projects.find((p) => p.id === node.projectId);
@@ -723,6 +745,7 @@ export function LeftSidebar() {
             },
           ],
         },
+        ...openRepositoryItems(projectRoot(project)),
         {
           label: virtual ? t("tree.collectionInfo") : t("tree.projectInfo"),
           onClick: () => openDialog({ type: "projectInfo", id: node.id }),

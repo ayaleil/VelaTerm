@@ -12,6 +12,7 @@ use uuid::Uuid;
 pub mod panel;
 pub mod compare;
 pub mod remote;
+pub mod web_url;
 
 /// Git clone progress event, delivered directly through Tauri or forwarded globally over WebSocket.
 pub const CLONE_PROGRESS_EVENT: &str = "git://clone-progress";

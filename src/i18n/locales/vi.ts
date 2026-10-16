@@ -1052,6 +1052,8 @@ const vi: typeof en = {
   "tree.sessionInfo": "Thông tin phiên",
   "tree.groupInfo": "Thông tin nhóm",
   "tree.collectionInfo": "Thông tin bộ sưu tập",
+  "tree.openRepository": "Mở kho mã",
+  "tree.openRepositoryNoRemote": "Kho Git của dự án này không có địa chỉ web: hãy thêm remote origin trỏ tới một máy chủ.",
   "tree.projectInfo": "Thông tin dự án",
   "info.branch": "Nhánh",
   "info.path": "Đường dẫn",
