@@ -311,12 +311,17 @@ pub fn clear_internal_relaunch(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Suppresses the last-remote-closed prompt while windows are torn down on the way out.
+pub(crate) fn mark_exiting<R: Runtime>(app: &AppHandle<R>) {
+    app.state::<LauncherState>().exiting.store(true, Ordering::SeqCst);
+}
+
 const QUIT_SILENT_WATCHDOG: Duration = Duration::from_millis(3000);
 
 /// Quit while main is hidden: main's webview still saves the workspace per the remembered preference and then
 /// confirms, but no dialog is drawn. A dead webview never confirms, so the watchdog exits regardless.
 pub(crate) fn quit_without_prompt(app: &AppHandle) {
-    app.state::<LauncherState>().exiting.store(true, Ordering::SeqCst);
+    mark_exiting(app);
     let _ = app.emit_to(MAIN_LABEL, "app://quit-silent", ());
     let app = app.clone();
     std::thread::spawn(move || {

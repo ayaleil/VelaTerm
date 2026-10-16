@@ -1347,9 +1347,8 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                         api.prevent_exit();
                         request_quit_confirmation(app);
                     }
-                    tauri::RunEvent::ExitRequested { .. } => {
-                        app.state::<launcher::LauncherState>().exiting.store(true, Ordering::SeqCst);
-                    }
+                    // Only exits that were not prevented reach this arm, because the guarded arm above comes first.
+                    tauri::RunEvent::ExitRequested { .. } => launcher::mark_exiting(app),
                     // Intercept main-window closure before destruction on every platform. Letting the window die
                     // first would tear down the webview that owns the confirmation dialog, so the prompt would
                     // arrive after the window is gone and could only be the degraded native fallback -- no
@@ -1497,7 +1496,7 @@ fn native_quit_confirmation(app: &tauri::AppHandle) {
             st.pending.store(false, Ordering::SeqCst);
             if should_quit {
                 st.confirmed.store(true, Ordering::SeqCst);
-                app.state::<launcher::LauncherState>().exiting.store(true, Ordering::SeqCst);
+                launcher::mark_exiting(&app);
                 app.exit(0);
             }
         });

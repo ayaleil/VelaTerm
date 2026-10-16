@@ -162,7 +162,7 @@ mod behavior_tests {
         let app = launcher_app();
         let h = app.handle();
         let ssh = window(h, "ssh-1a2b3c4d");
-        h.state::<crate::launcher::LauncherState>().exiting.store(true, Ordering::SeqCst);
+        crate::launcher::mark_exiting(h);
         assert!(!crate::launcher::offers_return(h, ssh.label(), false));
     }
 
