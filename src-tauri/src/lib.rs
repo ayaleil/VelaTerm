@@ -610,7 +610,7 @@ pub fn run(initial_open_project: Option<PathBuf>) {
             if queue_open_project(app, &args, &cwd) {
                 launcher::leave_launcher_for_main(app);
             } else {
-                launcher::focus_preferred(app);
+                launcher::focus::focus_preferred(app);
             }
         }));
     // Release builds use one GUI instance; development permits parallel worktree instances. Register
@@ -1371,7 +1371,7 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                     #[cfg(target_os = "macos")]
                     tauri::RunEvent::Reopen { .. } => {
                         if !launcher::main_visible(app) {
-                            launcher::focus_preferred(app);
+                            launcher::focus::focus_preferred(app);
                         }
                     }
                     // Window activation leaves keyboard focus on the top-level HWND under the `unstable`

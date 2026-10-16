@@ -49,27 +49,6 @@ pub(crate) fn should_offer_return(remaining_remote: usize, main_visible: bool, e
     remaining_remote == 0 && !main_visible && !exiting
 }
 
-#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
-#[derive(Debug, PartialEq)]
-pub(crate) enum FocusTarget {
-    Main,
-    Launcher,
-    Remote(String),
-}
-
-#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
-pub(crate) fn pick_focus_target(main_visible: bool, launcher_open: bool, recent_remotes: &[String]) -> FocusTarget {
-    if main_visible {
-        FocusTarget::Main
-    } else if launcher_open {
-        FocusTarget::Launcher
-    } else if let Some(newest) = recent_remotes.last() {
-        FocusTarget::Remote(newest.clone())
-    } else {
-        FocusTarget::Main
-    }
-}
-
 #[derive(Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct HiddenModeCopy {
@@ -174,23 +153,49 @@ pub(crate) fn note_focus(app: &AppHandle, label: &str) {
     push_focus(&mut app.state::<LauncherState>().focus_order.lock().unwrap(), label);
 }
 
-/// Oldest first. Remote windows never focused yet (e.g. opened behind a dialog) rank as the oldest.
+/// Focus routing for a second launch (release single-instance) and a macOS Dock click; neither path exists
+/// in debug builds on other platforms.
 #[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
-pub(crate) fn recent_remote_labels(app: &AppHandle) -> Vec<String> {
-    let live: Vec<String> = app.webview_windows().into_keys().filter(|l| is_remote_label(l)).collect();
-    let order = app.state::<LauncherState>().focus_order.lock().unwrap().clone();
-    let mut recent: Vec<String> = live.iter().filter(|l| !order.contains(l)).cloned().collect();
-    recent.extend(order.into_iter().filter(|l| live.contains(l)));
-    recent
-}
+pub(crate) mod focus {
+    use tauri::{AppHandle, Manager};
 
-#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
-pub(crate) fn focus_preferred(app: &AppHandle) {
-    let launcher_open = app.get_webview_window(LAUNCHER_LABEL).is_some();
-    match pick_focus_target(main_visible(app), launcher_open, &recent_remote_labels(app)) {
-        FocusTarget::Main => reveal_main(app),
-        FocusTarget::Launcher => raise(app, LAUNCHER_LABEL),
-        FocusTarget::Remote(label) => raise(app, &label),
+    use super::{is_remote_label, main_visible, raise, reveal_main, LauncherState, LAUNCHER_LABEL};
+
+    #[derive(Debug, PartialEq)]
+    pub(crate) enum FocusTarget {
+        Main,
+        Launcher,
+        Remote(String),
+    }
+
+    pub(crate) fn pick_focus_target(main_visible: bool, launcher_open: bool, recent_remotes: &[String]) -> FocusTarget {
+        if main_visible {
+            FocusTarget::Main
+        } else if launcher_open {
+            FocusTarget::Launcher
+        } else if let Some(newest) = recent_remotes.last() {
+            FocusTarget::Remote(newest.clone())
+        } else {
+            FocusTarget::Main
+        }
+    }
+
+    /// Oldest first. Remote windows never focused yet (e.g. opened behind a dialog) rank as the oldest.
+    pub(crate) fn recent_remote_labels(app: &AppHandle) -> Vec<String> {
+        let live: Vec<String> = app.webview_windows().into_keys().filter(|l| is_remote_label(l)).collect();
+        let order = app.state::<LauncherState>().focus_order.lock().unwrap().clone();
+        let mut recent: Vec<String> = live.iter().filter(|l| !order.contains(l)).cloned().collect();
+        recent.extend(order.into_iter().filter(|l| live.contains(l)));
+        recent
+    }
+
+    pub(crate) fn focus_preferred(app: &AppHandle) {
+        let launcher_open = app.get_webview_window(LAUNCHER_LABEL).is_some();
+        match pick_focus_target(main_visible(app), launcher_open, &recent_remote_labels(app)) {
+            FocusTarget::Main => reveal_main(app),
+            FocusTarget::Launcher => raise(app, LAUNCHER_LABEL),
+            FocusTarget::Remote(label) => raise(app, &label),
+        }
     }
 }
 
@@ -408,6 +413,7 @@ mod tests {
 
     #[test]
     fn focus_prefers_visible_main_then_launcher_then_newest_remote() {
+        use focus::{pick_focus_target, FocusTarget};
         let r = vec!["ssh-old".to_string(), "ssh-new".to_string()];
         assert_eq!(pick_focus_target(true, false, &r), FocusTarget::Main);
         assert_eq!(pick_focus_target(false, true, &r), FocusTarget::Launcher);
