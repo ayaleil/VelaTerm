@@ -225,3 +225,9 @@ jobs:
           # structure inside each, so the Tauri bundles arrive under dmg/, macos/, nsis/ and msi/, and gh
           # refuses a directory with "is a directory". Assets are uploaded by basename either way.
           find artifacts -type f -print0 | xargs -0 gh release upload "$tag" --clobber
+          # Deleting the tag of a published release makes GitHub demote that release to a draft, and a moved
+          # tag is exactly what re-running a failed release looks like. `gh release view` still finds a draft,
+          # so the create above is skipped and the assets land on a release nobody can download. Drafts are
+          # also excluded from /releases/latest/download/, which is the endpoint both updaters read, so the
+          # state is asserted here rather than assumed. Both flags are idempotent.
+          gh release edit "$tag" --draft=false --latest
