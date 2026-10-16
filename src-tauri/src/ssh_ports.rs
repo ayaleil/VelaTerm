@@ -261,8 +261,35 @@ pub fn forget_session(session: &str) -> Vec<u16> {
         .unwrap_or_default()
 }
 
+/// `lsof -F pn` listening addresses for 127.0.0.1, any (`*`, both families), ::1 and ::.
+const LSOF_LOOPBACK_OR_ANY: [&str; 4] = ["127.0.0.1", "*", "[::1]", "[::]"];
+
+/// Ports listening on loopback or any address in `lsof -F pn` output (`p<pid>` lines, each followed by
+/// `f<fd>` and `n<addr>:<port>` lines), sorted and deduplicated, skipping every socket of `exclude_pid`.
+pub fn parse_lsof_listening(raw: &str, exclude_pid: Option<u32>) -> Vec<u16> {
+    let mut pid = None;
+    let mut ports: Vec<u16> = raw
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim_end();
+            if let Some(p) = line.strip_prefix('p') {
+                pid = p.parse::<u32>().ok();
+                return None;
+            }
+            let (addr, port) = line.strip_prefix('n')?.rsplit_once(':')?;
+            if exclude_pid.is_some_and(|e| pid == Some(e)) || !LSOF_LOOPBACK_OR_ANY.contains(&addr) {
+                return None;
+            }
+            port.parse().ok()
+        })
+        .collect();
+    ports.sort_unstable();
+    ports.dedup();
+    ports
+}
+
 /// `2>/dev/null; true` keeps hosts without IPv6 (no tcp6 file) from failing the whole command; output
-/// without the `local_address` header (macOS, PowerShell) means detection is unavailable.
+/// without the `local_address` header (PowerShell) means detection is unavailable.
 const PROC_NET_CMD: &str = "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null; true";
 
 const FD_MARKER: &str = "---vela-fds---";
@@ -283,6 +310,45 @@ fn proc_net_cmd(service_pid: Option<u32>) -> String {
 fn parse_detection(out: &str) -> Vec<u16> {
     let (tcp, fds) = out.split_once(FD_MARKER).unwrap_or((out, ""));
     parse_listening_ports(tcp, &parse_socket_inodes(fds))
+}
+
+/// Printed only when lsof exists; lsof exits 1 when nothing listens, so its status cannot tell absence
+/// from an empty result. Without sudo, lsof lists only the SSH user's own processes. `-b -S 2` keeps a
+/// hung mount from stalling the poll in kernel stat/readlink calls.
+const LSOF_MARKER: &str = "---vela-lsof---";
+
+/// How listening ports are read on the remote host. Anything but macOS gets `/proc/net`; on Windows that
+/// output lacks its header and detection reads as unavailable.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Probe {
+    ProcNet,
+    Lsof,
+}
+
+impl Probe {
+    fn for_os(os: &str) -> Self {
+        match os {
+            "macos" => Probe::Lsof,
+            _ => Probe::ProcNet,
+        }
+    }
+
+    fn command(self, service_pid: Option<u32>) -> String {
+        match self {
+            Probe::ProcNet => proc_net_cmd(service_pid),
+            Probe::Lsof => format!(
+                "[ -x /usr/sbin/lsof ] && {{ /usr/sbin/lsof -b -S 2 -nP -iTCP -sTCP:LISTEN -F pn 2>/dev/null; echo {LSOF_MARKER}; }}; true"
+            ),
+        }
+    }
+
+    /// `None` means the output is not this probe's, so detection is unavailable.
+    fn parse(self, out: &str, service_pid: Option<u32>) -> Option<Vec<u16>> {
+        match self {
+            Probe::ProcNet => out.contains("local_address").then(|| parse_detection(out)),
+            Probe::Lsof => out.contains(LSOF_MARKER).then(|| parse_lsof_listening(out, service_pid)),
+        }
+    }
 }
 
 pub struct PortsOutcome {
@@ -338,10 +404,8 @@ fn refresh_detection(session: &str, t: &dyn SshTransport) {
         }
     }
     let _clear = ClearDetecting(session);
-    let listening = match t.exec(&proc_net_cmd(pid)) {
-        Ok(out) if out.contains("local_address") => Some(parse_detection(&out)),
-        _ => None,
-    };
+    let probe = Probe::for_os(&crate::ssh_remote::session_sys(session).os);
+    let listening = t.exec(&probe.command(pid)).ok().and_then(|out| probe.parse(&out, pid));
     with_registry(session, |r| r.set_listening(listening));
 }
 
@@ -454,6 +518,88 @@ lr-x------ 1 u u 64 Oct  6 12:00 7 -> /home/u/socket:[1]";
         let cmd = proc_net_cmd(Some(4242));
         assert!(cmd.contains("ls -l /proc/4242/fd") && cmd.contains(FD_MARKER));
         assert!(!PROC_NET_CMD.contains("/fd"));
+    }
+
+    const LSOF: &str = "p501
+f12
+n127.0.0.1:5173
+f13
+n[::1]:5173
+p502
+f4
+n*:8080
+f5
+n[::]:9000
+f6
+n192.168.1.20:7000
+p77
+f9
+n127.0.0.1:41000
+f10
+n*:3000";
+
+    #[test]
+    fn parses_lsof_listeners_on_loopback_and_any_and_dedupes_families() {
+        assert_eq!(parse_lsof_listening(LSOF, None), vec![3000, 5173, 8080, 9000, 41000]);
+    }
+
+    #[test]
+    fn lsof_parse_drops_every_socket_of_the_service_pid() {
+        assert_eq!(parse_lsof_listening(LSOF, Some(77)), vec![5173, 8080, 9000]);
+        assert_eq!(parse_lsof_listening(LSOF, Some(502)), vec![3000, 5173, 41000]);
+    }
+
+    #[test]
+    fn lsof_parse_ignores_empty_output_and_unknown_fields() {
+        assert!(parse_lsof_listening("", None).is_empty());
+        assert_eq!(parse_lsof_listening("p1\ncnode\nf3\ntIPv4\nn127.0.0.1:4000\nnjunk\n", None), vec![4000]);
+    }
+
+    #[test]
+    fn lsof_parse_tolerates_crlf_lines() {
+        let raw = "p501\r\r\nf3\r\nn127.0.0.1:5173\r";
+        assert_eq!(parse_lsof_listening(raw, None), vec![5173]);
+        assert!(parse_lsof_listening(raw, Some(501)).is_empty());
+    }
+
+    #[test]
+    fn lsof_parse_drops_wildcard_ports_mapped_and_named_addresses() {
+        let raw = "p1\nf3\nn*:*\nf4\nn[::ffff:127.0.0.1]:4001\nf5\nnlocalhost:4002\nf6\nn127.0.0.1:4003";
+        assert_eq!(parse_lsof_listening(raw, None), vec![4003]);
+    }
+
+    #[test]
+    fn lsof_parse_keeps_children_of_the_service_pid() {
+        let raw = "p77\nf3\nn127.0.0.1:41000\np78\nf4\nn*:5173";
+        assert_eq!(parse_lsof_listening(raw, Some(77)), vec![5173]);
+    }
+
+    #[test]
+    fn probe_is_lsof_only_on_macos() {
+        assert_eq!(Probe::for_os("macos"), Probe::Lsof);
+        assert_eq!(Probe::for_os("linux"), Probe::ProcNet);
+        assert_eq!(Probe::for_os("windows"), Probe::ProcNet);
+    }
+
+    #[test]
+    fn probe_commands_match_their_os() {
+        assert_eq!(Probe::ProcNet.command(Some(4242)), proc_net_cmd(Some(4242)));
+        let lsof = Probe::Lsof.command(Some(4242));
+        assert!(lsof.contains("/usr/sbin/lsof -b -S 2 -nP -iTCP -sTCP:LISTEN -F pn") && lsof.contains(LSOF_MARKER));
+        assert!(!lsof.contains("/proc"));
+    }
+
+    #[test]
+    fn probe_parse_requires_its_own_success_marker() {
+        let tcp = format!("{TCP4}\n{TCP6}");
+        assert_eq!(Probe::ProcNet.parse(&tcp, None), Some(vec![22, 3000, 5058, 8080]));
+        assert_eq!(Probe::ProcNet.parse(LSOF, None), None);
+
+        let lsof_ok = format!("{LSOF}\n{LSOF_MARKER}");
+        assert_eq!(Probe::Lsof.parse(&lsof_ok, Some(77)), Some(vec![5173, 8080, 9000]));
+        assert_eq!(Probe::Lsof.parse(LSOF_MARKER, None), Some(vec![]));
+        assert_eq!(Probe::Lsof.parse(LSOF, None), None);
+        assert_eq!(Probe::Lsof.parse(&tcp, None), None);
     }
 
     #[test]
@@ -726,6 +872,34 @@ lr-x------ 1 u u 64 Oct  6 12:00 7 -> /home/u/socket:[1]";
         assert_eq!(*t.exec_calls.lock().unwrap(), 1);
         assert_eq!(*inner.exec_calls.lock().unwrap(), 0);
         assert!(snap(s).detection_available);
+        forget_session(s);
+    }
+
+    #[test]
+    fn refresh_detection_on_macos_runs_lsof_and_records_its_ports() {
+        let s = "ports-detect-macos";
+        let macos = crate::ssh_remote::RemoteSystem { os: "macos".into(), ..crate::ssh_remote::session_sys(s) };
+        crate::ssh_remote::set_session_sys(s, &macos);
+        set_service_port(s, 41000, Some(77));
+        let t = FakeTransport::default();
+        *t.exec_out.lock().unwrap() = Some(Ok(format!("p77\nf3\nn127.0.0.1:41500\np78\nf4\nn*:5173\n{LSOF_MARKER}")));
+        refresh_detection(s, &t);
+        crate::ssh_remote::clear_session_sys(s);
+        assert_eq!(t.exec_cmds.lock().unwrap()[0], Probe::Lsof.command(Some(77)));
+        let sn = snap(s);
+        assert!(sn.detection_available);
+        assert_eq!(sn.detected, vec![5173]);
+        forget_session(s);
+    }
+
+    #[test]
+    fn refresh_detection_on_an_unregistered_session_uses_proc_net() {
+        let s = "ports-detect-unregistered";
+        let t = FakeTransport::default();
+        *t.exec_out.lock().unwrap() = Some(Ok(format!("p78\nf4\nn*:5173\n{LSOF_MARKER}")));
+        refresh_detection(s, &t);
+        assert_eq!(t.exec_cmds.lock().unwrap()[0], PROC_NET_CMD);
+        assert!(!snap(s).detection_available);
         forget_session(s);
     }
 
