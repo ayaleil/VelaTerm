@@ -1405,7 +1405,11 @@ fn request_quit_confirmation(app: &tauri::AppHandle) {
         return;
     }
     // Quitting at the launcher stage is closing the launcher: main was never shown, so there is no dialog to ask.
-    if app.get_webview_window(launcher::LAUNCHER_LABEL).is_some() && !launcher::main_visible(app) {
+    // A live remote window means sessions would die, so that case still goes through the normal confirmation.
+    if app.get_webview_window(launcher::LAUNCHER_LABEL).is_some()
+        && !launcher::main_visible(app)
+        && commands::remote_window_count(app) == 0
+    {
         launcher::quit_without_prompt(app);
         return;
     }
