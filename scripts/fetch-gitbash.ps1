@@ -111,12 +111,25 @@ function Get-Sha256([string]$Path) {
   (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLower()
 }
 
+# On CI runners the extracted tree can already hold these files (writing etc/mtab failed there with "access
+# denied"), e.g. as a symlink to /proc/mounts or read-only. Clearing ReadOnly and deleting first replaces the
+# entry itself; File.Delete removes a symlink, not its target. The logged attributes record what was found.
+function Clear-Target([string]$Path) {
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if ($item) {
+    Write-Host "    replacing existing $($item.Name) ($($item.Attributes))"
+    $item.Attributes = $item.Attributes -band -bnot [IO.FileAttributes]::ReadOnly
+  }
+  [IO.File]::Delete($Path)
+}
+
 function Write-GzipBase64([string]$Path, [string]$Data) {
   $bytes = [Convert]::FromBase64String(($Data -replace '\s', ''))
   $packed = New-Object IO.MemoryStream (, $bytes)
   $gzip = New-Object IO.Compression.GZipStream ($packed, [IO.Compression.CompressionMode]::Decompress)
   $plain = New-Object IO.MemoryStream
   try { $gzip.CopyTo($plain) } finally { $gzip.Dispose() }
+  Clear-Target $Path
   [IO.File]::WriteAllBytes($Path, $plain.ToArray())
 }
 
@@ -180,6 +193,7 @@ $mtab = "D:/cygwin64/bin /usr/bin ntfs binary,auto 1 1`n" +
   "D:/cygwin64 / ntfs binary,auto 1 1`n" +
   "C: /cygdrive/c ntfs binary,posix=0,user,noumount,auto 1 1`n" +
   "D: /cygdrive/d ntfs binary,posix=0,user,noumount,auto 1 1`n"
+Clear-Target (Join-Path $Staging 'etc\mtab')
 [IO.File]::WriteAllText((Join-Path $Staging 'etc\mtab'), $mtab, (New-Object Text.UTF8Encoding $false))
 #    13-copy-dlls hardlinks git.exe as the dlls-copied sentinel; the DLLs it links already ship in git-core.
 Copy-Item -LiteralPath (Join-Path $Staging 'mingw64\bin\git.exe') `
