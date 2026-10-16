@@ -6,8 +6,15 @@ on:
     paths:
       - src-tauri/**
       - src/**
+      - package.json
+      - pnpm-lock.yaml
       - scripts/build-vela-server.sh
+      - .github/scripts/server-manifest.py
       - .github/workflows/vela-server*.yml
+
+concurrency:
+  group: vela-server-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
