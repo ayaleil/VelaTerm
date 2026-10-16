@@ -48,6 +48,7 @@ pub(crate) fn should_offer_return(remaining_remote: usize, main_visible: bool, e
     remaining_remote == 0 && !main_visible && !exiting
 }
 
+#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
 #[derive(Debug, PartialEq)]
 pub(crate) enum FocusTarget {
     Main,
@@ -55,6 +56,7 @@ pub(crate) enum FocusTarget {
     Remote(String),
 }
 
+#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
 pub(crate) fn pick_focus_target(main_visible: bool, launcher_open: bool, recent_remotes: &[String]) -> FocusTarget {
     if main_visible {
         FocusTarget::Main
@@ -81,12 +83,12 @@ pub(crate) struct HiddenModeCopy {
 impl Default for HiddenModeCopy {
     fn default() -> Self {
         Self {
-            hide_prompt: "Hide the main window while this session is open?".into(),
+            hide_prompt: "Hide the local window while you work over SSH?".into(),
             hide: "Hide".into(),
             keep_open: "Keep open".into(),
-            last_closed_prompt: "The last remote window was closed. Return to the local window?".into(),
-            return_to_local: "Return to local".into(),
-            quit: "Quit".into(),
+            last_closed_prompt: "No remote windows are open. Return to the local app or quit VelaTerm?".into(),
+            return_to_local: "Return to local app".into(),
+            quit: "Quit VelaTerm".into(),
         }
     }
 }
@@ -167,6 +169,7 @@ pub(crate) fn note_focus(app: &AppHandle, label: &str) {
 }
 
 /// Oldest first. Remote windows never focused yet (e.g. opened behind a dialog) rank as the oldest.
+#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
 pub(crate) fn recent_remote_labels(app: &AppHandle) -> Vec<String> {
     let live: Vec<String> = app.webview_windows().into_keys().filter(|l| is_remote_label(l)).collect();
     let order = app.state::<LauncherState>().focus_order.lock().unwrap().clone();
@@ -175,6 +178,7 @@ pub(crate) fn recent_remote_labels(app: &AppHandle) -> Vec<String> {
     recent
 }
 
+#[cfg_attr(all(debug_assertions, not(target_os = "macos")), allow(dead_code))]
 pub(crate) fn focus_preferred(app: &AppHandle) {
     let launcher_open = app.get_webview_window(LAUNCHER_LABEL).is_some();
     match pick_focus_target(main_visible(app), launcher_open, &recent_remote_labels(app)) {
@@ -195,7 +199,10 @@ pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
         || app.state::<crate::QuitState>().confirmed.load(Ordering::SeqCst);
     let labels: Vec<String> = app.webview_windows().into_keys().collect();
     let remaining = remote_count_excluding(labels.iter().map(String::as_str), label);
-    if !should_offer_return(remaining, main_visible(app), exiting) {
+    let main_shown = app
+        .get_webview_window(MAIN_LABEL)
+        .map_or(true, |win| win.is_visible().unwrap_or(false));
+    if !should_offer_return(remaining, main_shown, exiting) {
         return;
     }
     let copy = state.copy.lock().unwrap().clone();

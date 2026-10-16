@@ -26,9 +26,8 @@ pub fn is_remote_window_label(label: &str) -> bool {
         .any(|prefix| label.starts_with(prefix))
 }
 
-/// Whether `labels` contain a remote window other than `except`. `except` names a window whose destruction
-/// is being handled: Tauri unregisters it before delivering the event, but an explicit exclusion keeps the
-/// decision independent of that ordering.
+/// Whether `labels` contain a remote window other than `except`. `except` optionally excludes one label from
+/// the check; the current caller passes `None` because it queries live windows.
 pub fn remote_window_among<'a>(
     labels: impl IntoIterator<Item = &'a str>,
     except: Option<&str>,

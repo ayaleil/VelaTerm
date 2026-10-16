@@ -1370,7 +1370,11 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                         }
                     }
                     #[cfg(target_os = "macos")]
-                    tauri::RunEvent::Reopen { .. } => launcher::focus_preferred(app),
+                    tauri::RunEvent::Reopen { .. } => {
+                        if !launcher::main_visible(app) {
+                            launcher::focus_preferred(app);
+                        }
+                    }
                     // Window activation leaves keyboard focus on the top-level HWND under the `unstable`
                     // child-webview path; hand it back to the webview the user was typing in.
                     #[cfg(target_os = "windows")]
