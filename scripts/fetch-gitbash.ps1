@@ -180,10 +180,17 @@ $mtab = "D:/cygwin64/bin /usr/bin ntfs binary,auto 1 1`n" +
   "D:/cygwin64 / ntfs binary,auto 1 1`n" +
   "C: /cygdrive/c ntfs binary,posix=0,user,noumount,auto 1 1`n" +
   "D: /cygdrive/d ntfs binary,posix=0,user,noumount,auto 1 1`n"
-[IO.File]::WriteAllText((Join-Path $Staging 'etc\mtab'), $mtab, (New-Object Text.UTF8Encoding $false))
+#    PortableGit ships etc/mtab as an MSYS symlink, a file with the System attribute that WriteAllText refuses
+#    to overwrite, so remove it first.
+$mtabPath = Join-Path $Staging 'etc\mtab'
+if (Test-Path -LiteralPath $mtabPath) { Remove-Item -LiteralPath $mtabPath -Force }
+[IO.File]::WriteAllText($mtabPath, $mtab, (New-Object Text.UTF8Encoding $false))
 #    13-copy-dlls hardlinks git.exe as the dlls-copied sentinel; the DLLs it links already ship in git-core.
-Copy-Item -LiteralPath (Join-Path $Staging 'mingw64\bin\git.exe') `
-  -Destination (Join-Path $Staging 'mingw64\libexec\git-core\dlls-copied.exe') -Force
+#    PortableGit may already ship the sentinel as a hardlink to git.exe, which Copy-Item rejects as copying a
+#    file onto itself, so remove it first; removing the link leaves git.exe intact.
+$sentinel = Join-Path $Staging 'mingw64\libexec\git-core\dlls-copied.exe'
+if (Test-Path -LiteralPath $sentinel) { Remove-Item -LiteralPath $sentinel -Force }
+Copy-Item -LiteralPath (Join-Path $Staging 'mingw64\bin\git.exe') -Destination $sentinel -Force
 #    99-post-install-cleanup and post-install.bat delete themselves. dev/ and tmp/ only hold empty directories,
 #    and the documentation is dropped to keep the installer small.
 foreach ($path in 'post-install.bat', 'etc\post-install', 'dev', 'tmp', 'mingw64\share\doc') {
