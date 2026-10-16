@@ -180,7 +180,11 @@ $mtab = "D:/cygwin64/bin /usr/bin ntfs binary,auto 1 1`n" +
   "D:/cygwin64 / ntfs binary,auto 1 1`n" +
   "C: /cygdrive/c ntfs binary,posix=0,user,noumount,auto 1 1`n" +
   "D: /cygdrive/d ntfs binary,posix=0,user,noumount,auto 1 1`n"
-[IO.File]::WriteAllText((Join-Path $Staging 'etc\mtab'), $mtab, (New-Object Text.UTF8Encoding $false))
+#    PortableGit ships etc/mtab as an MSYS symlink, a file with the System attribute that WriteAllText refuses
+#    to overwrite, so remove it first.
+$mtabPath = Join-Path $Staging 'etc\mtab'
+if (Test-Path -LiteralPath $mtabPath) { Remove-Item -LiteralPath $mtabPath -Force }
+[IO.File]::WriteAllText($mtabPath, $mtab, (New-Object Text.UTF8Encoding $false))
 #    13-copy-dlls hardlinks git.exe as the dlls-copied sentinel; the DLLs it links already ship in git-core.
 Copy-Item -LiteralPath (Join-Path $Staging 'mingw64\bin\git.exe') `
   -Destination (Join-Path $Staging 'mingw64\libexec\git-core\dlls-copied.exe') -Force
