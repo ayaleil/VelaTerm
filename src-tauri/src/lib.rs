@@ -1322,6 +1322,7 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
             launcher::launcher_resize,
             launcher::mark_internal_relaunch,
             launcher::clear_internal_relaunch,
+            launcher::set_hidden_mode_copy,
             // 7) macOS native notifications invoked directly from notify.ts.
             native_notify,
             native_notify_auth_status,

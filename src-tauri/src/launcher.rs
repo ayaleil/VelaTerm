@@ -117,6 +117,39 @@ pub(crate) fn main_visible(app: &AppHandle) -> bool {
         .map_or(true, |win| win.is_visible().unwrap_or(true))
 }
 
+/// Called on the main thread right after an SSH window opens. The dialog is non-blocking so the
+/// pending `ssh_connect` can return while the user decides.
+pub(crate) fn on_ssh_window_opened(app: &AppHandle, caller: &str, ssh_label: &str) {
+    if caller == LAUNCHER_LABEL {
+        if let Some(win) = app.get_webview_window(LAUNCHER_LABEL) {
+            let _ = win.destroy();
+        }
+        return;
+    }
+    if caller != MAIN_LABEL || !main_visible(app) {
+        return;
+    }
+    let Some(ssh_window) = app.get_webview_window(ssh_label) else { return };
+    let copy = app.state::<LauncherState>().copy.lock().unwrap().clone();
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+    let handle = app.clone();
+    app.dialog()
+        .message(copy.hide_prompt)
+        .title("VelaTerm")
+        .buttons(MessageDialogButtons::OkCancelCustom(copy.hide, copy.keep_open))
+        .parent(&ssh_window)
+        .show(move |hide| {
+            if hide {
+                hide_main(&handle);
+            }
+        });
+}
+
+#[tauri::command]
+pub fn set_hidden_mode_copy(state: tauri::State<LauncherState>, copy: HiddenModeCopy) {
+    *state.copy.lock().unwrap() = copy;
+}
+
 const LAUNCHER_WIDTH: f64 = 480.0;
 const LAUNCHER_HEIGHT: f64 = 320.0;
 const LAUNCHER_EXPANDED_HEIGHT: f64 = 600.0;
@@ -257,6 +290,18 @@ mod tests {
         assert!(!should_offer_return(1, false, false));
         assert!(!should_offer_return(0, true, false));
         assert!(!should_offer_return(0, false, true));
+    }
+
+    #[test]
+    fn hidden_mode_copy_deserializes_from_camel_case() {
+        let copy: HiddenModeCopy = serde_json::from_str(
+            r#"{"hidePrompt":"a","hide":"b","keepOpen":"c","lastClosedPrompt":"d","returnToLocal":"e","quit":"f"}"#,
+        )
+        .unwrap();
+        assert_eq!(copy.hide_prompt, "a");
+        assert_eq!(copy.keep_open, "c");
+        assert_eq!(copy.last_closed_prompt, "d");
+        assert_eq!(copy.return_to_local, "e");
     }
 
     #[test]

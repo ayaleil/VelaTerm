@@ -1043,6 +1043,7 @@ pub async fn ssh_trust_host(host: String, was_changed: bool) -> Result<(), Strin
 #[tauri::command]
 pub async fn ssh_connect(
     app: AppHandle,
+    window: tauri::WebviewWindow,
     db: State<'_, Db>,
     host: String,
     password: Option<String>,
@@ -1051,6 +1052,7 @@ pub async fn ssh_connect(
     mirror: Option<bool>,
     diagnostic_request_id: Option<String>,
 ) -> Result<String, String> {
+    let caller = window.label().to_string();
     // Data mode defaults to an isolated database; true reuses the remote desktop release database.
     let shared_db = shared_db.unwrap_or(false);
     // Mirror mode defaults off. On, the connection follows the remote desktop app: it attaches to the
@@ -1154,8 +1156,9 @@ pub async fn ssh_connect(
         );
     }
     let app2 = app.clone();
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
     app.run_on_main_thread(move || {
-        if let Err(e) = open_login_window(
+        let opened = open_login_window(
             &app2,
             &host,
             &r.session,
@@ -1163,11 +1166,22 @@ pub async fn ssh_connect(
             &r.password,
             r.desktop_link,
             RemoteWindowKind::Ssh,
-        ) {
-            crate::diagnostic_warn!("open ssh login window failed: {e}");
-        }
+        );
+        let outcome = match opened {
+            Ok(label) => {
+                crate::launcher::on_ssh_window_opened(&app2, &caller, &label);
+                Ok(())
+            }
+            Err(e) => {
+                crate::diagnostic_warn!("open ssh login window failed: {e}");
+                Err(e)
+            }
+        };
+        let _ = tx.send(outcome);
     })
     .map_err(|e| format!("failed to schedule window open on main thread: {e}"))?;
+    rx.await
+        .map_err(|_| "window open task was dropped".to_string())??;
     Ok(session)
 }
 
@@ -1239,7 +1253,7 @@ fn open_login_window(
     password: &str,
     desktop_link: bool,
     kind: RemoteWindowKind,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let parsed: url::Url = format!("http://127.0.0.1:{local_port}/")
         .parse()
         .map_err(|e| format!("failed to build local forward address: {e}"))?;
@@ -1377,5 +1391,5 @@ fn open_login_window(
     crate::window_layout::apply(&win);
     win.show().map_err(|e| format!("Failed to show {} window: {e}", kind.name()))?;
     let _ = win.set_focus();
-    Ok(())
+    Ok(label)
 }
