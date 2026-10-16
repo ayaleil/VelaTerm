@@ -2382,6 +2382,16 @@ const zhCN: typeof en = {
   "ports.limit": (max) => `每个连接最多可转发 ${max} 个端口`, // At most {max} ports can be forwarded per connection
   "ports.notForwarded": (port) => `端口 ${port} 未被转发`, // Port {port} is not forwarded
   "statusbar.ports": (n) => `已转发 ${n} 个端口`, // {n} forwarded ports
+  "launcher.title": "How do you want to start?", // English
+  "launcher.local": "Local terminal", // English
+  "launcher.ssh": "Connect via SSH", // English
+  "launcher.back": "Back", // English
+  "hiddenMode.hidePrompt": "Hide the local window while you work over SSH?", // English
+  "hiddenMode.hide": "Hide", // English
+  "hiddenMode.keepOpen": "Keep open", // English
+  "hiddenMode.lastClosedPrompt": "No remote windows are open. Return to the local app or quit VelaTerm?", // English
+  "hiddenMode.returnToLocal": "Return to local app", // English
+  "hiddenMode.quit": "Quit VelaTerm", // English
 };
 
 export default zhCN;

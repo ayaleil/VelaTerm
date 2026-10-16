@@ -2432,6 +2432,16 @@ const ja: typeof en = {
   "ports.limit": (max) => `1 つの接続で転送できるポートは最大 ${max} 個です`, // At most {max} ports can be forwarded per connection
   "ports.notForwarded": (port) => `ポート ${port} は転送されていません`, // Port {port} is not forwarded
   "statusbar.ports": (n) => `${n} 個のポートを転送中`, // {n} forwarded ports
+  "launcher.title": "How do you want to start?", // English
+  "launcher.local": "Local terminal", // English
+  "launcher.ssh": "Connect via SSH", // English
+  "launcher.back": "Back", // English
+  "hiddenMode.hidePrompt": "Hide the local window while you work over SSH?", // English
+  "hiddenMode.hide": "Hide", // English
+  "hiddenMode.keepOpen": "Keep open", // English
+  "hiddenMode.lastClosedPrompt": "No remote windows are open. Return to the local app or quit VelaTerm?", // English
+  "hiddenMode.returnToLocal": "Return to local app", // English
+  "hiddenMode.quit": "Quit VelaTerm", // English
 };
 
 export default ja;
