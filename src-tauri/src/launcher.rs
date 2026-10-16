@@ -1,7 +1,11 @@
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
+
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::main_window::MAIN_LABEL;
 
 pub(crate) const LAUNCHER_LABEL: &str = "launcher";
 pub(crate) const RELAUNCH_MARKER: &str = "launcher-skip-once";
@@ -90,6 +94,40 @@ pub(crate) struct LauncherState {
     pub exiting: AtomicBool,
     pub focus_order: Mutex<Vec<String>>,
     pub copy: Mutex<HiddenModeCopy>,
+}
+
+pub(crate) fn reveal_main(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window(MAIN_LABEL) {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
+pub(crate) fn hide_main(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window(MAIN_LABEL) {
+        let _ = win.hide();
+    }
+}
+
+pub(crate) fn main_visible(app: &AppHandle) -> bool {
+    app.get_webview_window(MAIN_LABEL)
+        .map_or(true, |win| win.is_visible().unwrap_or(true))
+}
+
+const QUIT_SILENT_WATCHDOG: Duration = Duration::from_millis(3000);
+
+/// Quit while main is hidden: main's webview still saves the workspace per the remembered preference and then
+/// confirms, but no dialog is drawn. A dead webview never confirms, so the watchdog exits regardless.
+pub(crate) fn quit_without_prompt(app: &AppHandle) {
+    app.state::<LauncherState>().exiting.store(true, Ordering::SeqCst);
+    let _ = app.emit_to(MAIN_LABEL, "app://quit-silent", ());
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(QUIT_SILENT_WATCHDOG);
+        app.state::<crate::QuitState>().confirmed.store(true, Ordering::SeqCst);
+        app.exit(0);
+    });
 }
 
 #[cfg(test)]

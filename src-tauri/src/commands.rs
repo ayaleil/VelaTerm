@@ -46,6 +46,9 @@ pub fn confirm_quit(app: AppHandle, state: State<crate::QuitState>) {
     use std::sync::atomic::Ordering;
     state.pending.store(false, Ordering::SeqCst);
     state.confirmed.store(true, Ordering::SeqCst);
+    app.state::<crate::launcher::LauncherState>()
+        .exiting
+        .store(true, Ordering::SeqCst);
     app.exit(0);
 }
 

@@ -1321,6 +1321,9 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                         api.prevent_exit();
                         request_quit_confirmation(app);
                     }
+                    tauri::RunEvent::ExitRequested { .. } => {
+                        app.state::<launcher::LauncherState>().exiting.store(true, Ordering::SeqCst);
+                    }
                     // Intercept main-window closure before destruction on every platform. Letting the window die
                     // first would tear down the webview that owns the confirmation dialog, so the prompt would
                     // arrive after the window is gone and could only be the degraded native fallback -- no
@@ -1401,8 +1404,15 @@ fn request_quit_confirmation(app: &tauri::AppHandle) {
     if st.confirmed.load(Ordering::SeqCst) {
         return;
     }
+    // Quitting at the launcher stage is closing the launcher: main was never shown, so there is no dialog to ask.
+    if app.get_webview_window(launcher::LAUNCHER_LABEL).is_some() && !launcher::main_visible(app) {
+        launcher::quit_without_prompt(app);
+        return;
+    }
     // The frontend dialog lives in the main webview, which may be hidden behind remote-only work.
-    main_window::reveal_hidden_main(app);
+    if !launcher::main_visible(app) {
+        launcher::reveal_main(app);
+    }
     // A request arriving while one is already pending is not a duplicate to drop: the frontend that
     // acknowledged the first one may since have reloaded or crashed, taking its dialog with it. Dropping
     // it would latch `pending` forever and leave the application unquittable, because only the frontend
@@ -1464,6 +1474,7 @@ fn native_quit_confirmation(app: &tauri::AppHandle) {
             st.pending.store(false, Ordering::SeqCst);
             if should_quit {
                 st.confirmed.store(true, Ordering::SeqCst);
+                app.state::<launcher::LauncherState>().exiting.store(true, Ordering::SeqCst);
                 app.exit(0);
             }
         });
