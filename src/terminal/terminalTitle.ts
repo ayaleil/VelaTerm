@@ -9,14 +9,19 @@ const DEFAULT_TITLES = new Set(["Claude Code"]);
 
 const MAX_NAME_LENGTH = 80;
 
+/** Claude's status glyphs: ✳ and similar stars when idle, a braille spinner while working. */
+const STATUS_PREFIX = /^[\s\u2733\u2800-\u28FF✻✽✶✢·*]+/u;
+
 /**
  * Turns a terminal title into a session name, or null when the title should not rename the session.
- * Claude prefixes its title with a status glyph (✳ idle, braille spinner while working); it is stripped so
- * the name stays stable while the status changes.
+ * Claude prefixes its title with a status glyph; it is stripped so the name stays stable while the status
+ * changes.
  */
 export function sessionNameFromTitle(kind: SessionKind, title: string): string | null {
   if (!TITLE_RENAMES_KINDS.includes(kind)) return null;
-  const name = title.replace(/^[^\p{L}\p{N}]+/u, "").trim().slice(0, MAX_NAME_LENGTH);
+  const stripped = title.replace(STATUS_PREFIX, "").trim();
+  // Cap by code points so an emoji is never split into a lone surrogate.
+  const name = Array.from(stripped).slice(0, MAX_NAME_LENGTH).join("").trim();
   if (!name || DEFAULT_TITLES.has(name)) return null;
   return name;
 }

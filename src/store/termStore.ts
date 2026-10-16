@@ -560,8 +560,10 @@ let layoutRestored = false;
  * write, whose processes die with the application, but an explicitly saved workspace keeps them so restored
  * split layouts stay intact.
  */
-/** Session names being saved from a terminal title, keyed by session id. */
-const pendingTitleNames = new Map<SessionId, string>();
+/** Last session name derived from each session's terminal title, keyed by session id. */
+const lastTitleNames = new Map<SessionId, string>();
+/** In-flight title renames per session, chained so they persist in order. */
+const renameChains = new Map<SessionId, Promise<void>>();
 
 function buildLayout(keepEphemeral: boolean): PersistedLayout {
   {
@@ -3867,17 +3869,24 @@ export const useTermStore = create<TermStore>((set, get) => ({
     const session = persisted ?? st.ephemeralSessions[id];
     if (!session) return;
     const name = sessionNameFromTitle(session.kind, title);
-    if (!name || name === session.name || pendingTitleNames.get(id) === name) return;
+    // Claude's spinner resends the same title several times a second. Act only when the title itself changes,
+    // so a manual rename holds until Claude sets a new title.
+    if (!name || lastTitleNames.get(id) === name) return;
+    lastTitleNames.set(id, name);
+    if (name === session.name) return;
     if (!persisted) {
       get().renameScratch(id, name);
       return;
     }
-    // Claude's spinner retitles several times a second; skip repeats while the rename is in flight.
-    pendingTitleNames.set(id, name);
+    // Chain renames per session so a slower earlier save cannot land after a newer title.
+    const next = (renameChains.get(id) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => get().renameNode("session", id, name));
+    renameChains.set(id, next);
     try {
-      await get().renameNode("session", id, name);
+      await next;
     } finally {
-      if (pendingTitleNames.get(id) === name) pendingTitleNames.delete(id);
+      if (renameChains.get(id) === next) renameChains.delete(id);
     }
   },
 

@@ -90,4 +90,35 @@ describe("applyTerminalTitle", () => {
     ]);
     expect(ipcTree.renameNode).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a manual rename until Claude changes its title", async () => {
+    const store = useTermStore.getState();
+    await store.applyTerminalTitle("c1", "✳ Fix login bug");
+    useTermStore.setState({ sessions: [session("c1", "claude", "my name")] });
+    vi.mocked(ipcTree.renameNode).mockClear();
+    await store.applyTerminalTitle("c1", "⠂ Fix login bug");
+    expect(ipcTree.renameNode).not.toHaveBeenCalled();
+    await store.applyTerminalTitle("c1", "✳ Add tests");
+    expect(ipcTree.renameNode).toHaveBeenCalledWith("session", "c1", "Add tests");
+  });
+
+  it("saves titles in the order Claude sets them", async () => {
+    const order: string[] = [];
+    let release: (() => void) | undefined;
+    vi.mocked(ipcTree.renameNode)
+      .mockImplementationOnce(async (_k, _id, name) => {
+        await new Promise<void>((r) => (release = r));
+        order.push(name);
+      })
+      .mockImplementationOnce(async (_k, _id, name) => {
+        order.push(name);
+      });
+    const store = useTermStore.getState();
+    const first = store.applyTerminalTitle("c1", "✳ First");
+    const second = store.applyTerminalTitle("c1", "✳ Second");
+    await vi.waitFor(() => expect(release).toBeDefined());
+    release!();
+    await Promise.all([first, second]);
+    expect(order).toEqual(["First", "Second"]);
+  });
 });

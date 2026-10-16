@@ -27,4 +27,15 @@ describe("sessionNameFromTitle", () => {
   it("caps very long titles", () => {
     expect(sessionNameFromTitle("claude", "a".repeat(200))).toHaveLength(80);
   });
+
+  it("keeps meaningful leading characters", () => {
+    expect(sessionNameFromTitle("claude", "✳ #42 fix")).toBe("#42 fix");
+    expect(sessionNameFromTitle("claude", "\"quoted\" task")).toBe("\"quoted\" task");
+  });
+
+  it("does not split a character when capping", () => {
+    const name = sessionNameFromTitle("claude", "a".repeat(79) + "😀😀")!;
+    expect(Array.from(name)).toHaveLength(80);
+    expect(name.endsWith("😀")).toBe(true);
+  });
 });
