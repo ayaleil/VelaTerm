@@ -185,6 +185,15 @@ mod behavior_tests {
     }
 
     #[test]
+    fn choosing_local_keeps_the_launcher_when_main_cannot_be_shown() {
+        let app = launcher_app();
+        let h = app.handle();
+        let _launcher = window(h, crate::launcher::LAUNCHER_LABEL);
+        assert!(!crate::launcher::leave_launcher_for_main(h));
+        assert!(h.get_webview_window(crate::launcher::LAUNCHER_LABEL).is_some());
+    }
+
+    #[test]
     fn ssh_window_opened_from_the_launcher_closes_it() {
         let app = launcher_app();
         let h = app.handle();

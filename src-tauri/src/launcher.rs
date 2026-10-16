@@ -231,9 +231,14 @@ pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
 }
 
 /// A project open request skips the launcher, including one that arrives while the launcher is already up.
-/// Returns whether the launcher was closed.
+/// Returns whether the launcher was closed; it stays open unless main actually came up, so the process
+/// never ends up without a visible window.
 pub(crate) fn leave_launcher_for_main<R: Runtime>(app: &AppHandle<R>) -> bool {
     reveal_main(app);
+    if app.get_webview_window(MAIN_LABEL).is_none() || !main_visible(app) {
+        crate::diagnostic_warn!("main window did not become visible; keeping the launcher open");
+        return false;
+    }
     close_launcher(app)
 }
 
