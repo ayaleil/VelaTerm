@@ -2,9 +2,8 @@
 //!
 //! Someone working entirely remotely has no use for the local main window, yet closing it used to quit the
 //! whole application and take every remote window with it. While a remote window is open, closing `main`
-//! therefore only hides it: the webview and all local sessions stay alive in the background. The window
-//! comes back on a Dock click, before a quit prompt (the prompt lives in its webview), and when the last
-//! remote window closes, so the process is never left without a window.
+//! therefore only hides it: the webview and all local sessions stay alive in the background. Bringing it
+//! back (Dock click, quit prompt, last remote window closing) lives in `launcher`.
 
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -39,15 +38,6 @@ pub fn remote_window_among<'a>(
         .any(|label| is_remote_window_label(label) && Some(label) != except)
 }
 
-/// Whether destroying the window `destroyed` leaves the application without any remote window, which is
-/// when a hidden main window has to come back.
-pub fn last_remote_window_closed<'a>(
-    destroyed: &str,
-    remaining: impl IntoIterator<Item = &'a str>,
-) -> bool {
-    is_remote_window_label(destroyed) && !remote_window_among(remaining, Some(destroyed))
-}
-
 fn open_labels<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
     app.webview_windows().into_keys().collect()
 }
@@ -62,29 +52,6 @@ pub fn hide_main_for_remote<R: Runtime>(app: &AppHandle<R>) -> bool {
     }
     app.get_webview_window(MAIN_LABEL)
         .is_some_and(|win| win.hide().is_ok())
-}
-
-/// Show and focus the main window if it is hidden. A visible main window is left alone, so this never
-/// steals focus from a remote window the user is working in.
-pub fn reveal_hidden_main<R: Runtime>(app: &AppHandle<R>) {
-    let Some(win) = app.get_webview_window(MAIN_LABEL) else {
-        return;
-    };
-    if win.is_visible().unwrap_or(true) {
-        return;
-    }
-    let _ = win.unminimize();
-    let _ = win.show();
-    let _ = win.set_focus();
-}
-
-/// Bring back a hidden main window once the last remote window is destroyed, so the process never keeps
-/// running without any window.
-pub fn on_window_destroyed<R: Runtime>(app: &AppHandle<R>, label: &str) {
-    let labels = open_labels(app);
-    if last_remote_window_closed(label, labels.iter().map(String::as_str)) {
-        reveal_hidden_main(app);
-    }
 }
 
 #[cfg(test)]
@@ -128,22 +95,6 @@ mod tests {
         assert!(remote_window_among(["main", "ssh-1a2b3c4d"], None));
         assert!(remote_window_among(["account-remote-0123", "main"], None));
     }
-
-    #[test]
-    fn main_returns_only_after_the_last_remote_window_closes() {
-        // Another remote window is still open.
-        assert!(!last_remote_window_closed("remote-1", ["main", "ssh-2"]));
-        assert!(!last_remote_window_closed(
-            "remote-1",
-            ["main", "remote-1", "account-remote-3"]
-        ));
-        // The destroyed window was the last one, whether or not it is still registered.
-        assert!(last_remote_window_closed("ssh-2", ["main"]));
-        assert!(last_remote_window_closed("ssh-2", ["main", "ssh-2"]));
-        // A non-remote window never triggers the reveal, even with no remote window left.
-        assert!(!last_remote_window_closed("download-remote-test", ["main"]));
-        assert!(!last_remote_window_closed("main", []));
-    }
 }
 
 // Tauri's mock runtime needs the `native-menu-tests` feature:
@@ -168,16 +119,8 @@ mod behavior_tests {
         let _other = window(app.handle(), "download-remote-test");
         assert!(!hide_main_for_remote(app.handle()));
 
-        let ssh = window(app.handle(), "ssh-1a2b3c4d");
+        let _ssh = window(app.handle(), "ssh-1a2b3c4d");
         assert!(hide_main_for_remote(app.handle()));
-        assert!(!last_remote_window_closed(
-            "remote-9",
-            open_labels(app.handle()).iter().map(String::as_str)
-        ));
-        assert!(last_remote_window_closed(
-            ssh.label(),
-            open_labels(app.handle()).iter().map(String::as_str)
-        ));
     }
 
     #[test]

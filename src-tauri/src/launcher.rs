@@ -98,12 +98,16 @@ pub(crate) struct LauncherState {
     pub copy: Mutex<HiddenModeCopy>,
 }
 
-pub(crate) fn reveal_main(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window(MAIN_LABEL) {
+fn raise(app: &AppHandle, label: &str) {
+    if let Some(win) = app.get_webview_window(label) {
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
     }
+}
+
+pub(crate) fn reveal_main(app: &AppHandle) {
+    raise(app, MAIN_LABEL);
 }
 
 pub(crate) fn hide_main(app: &AppHandle) {
@@ -139,10 +143,83 @@ pub(crate) fn on_ssh_window_opened(app: &AppHandle, caller: &str, ssh_label: &st
         .buttons(MessageDialogButtons::OkCancelCustom(copy.hide, copy.keep_open))
         .parent(&ssh_window)
         .show(move |hide| {
-            if hide {
+            // The SSH window may have died while the dialog was open; hiding main then would leave no window.
+            if hide && handle.webview_windows().keys().any(|l| is_remote_label(l)) {
                 hide_main(&handle);
             }
         });
+}
+
+pub(crate) fn push_focus(order: &mut Vec<String>, label: &str) {
+    if !is_remote_label(label) {
+        return;
+    }
+    forget_focus(order, label);
+    order.push(label.to_string());
+}
+
+pub(crate) fn forget_focus(order: &mut Vec<String>, label: &str) {
+    order.retain(|l| l != label);
+}
+
+pub(crate) fn note_focus(app: &AppHandle, label: &str) {
+    push_focus(&mut app.state::<LauncherState>().focus_order.lock().unwrap(), label);
+}
+
+/// Oldest first. Remote windows never focused yet (e.g. opened behind a dialog) rank as the oldest.
+pub(crate) fn recent_remote_labels(app: &AppHandle) -> Vec<String> {
+    let live: Vec<String> = app.webview_windows().into_keys().filter(|l| is_remote_label(l)).collect();
+    let order = app.state::<LauncherState>().focus_order.lock().unwrap().clone();
+    let mut recent: Vec<String> = live.iter().filter(|l| !order.contains(l)).cloned().collect();
+    recent.extend(order.into_iter().filter(|l| live.contains(l)));
+    recent
+}
+
+pub(crate) fn focus_preferred(app: &AppHandle) {
+    let launcher_open = app.get_webview_window(LAUNCHER_LABEL).is_some();
+    match pick_focus_target(main_visible(app), launcher_open, &recent_remote_labels(app)) {
+        FocusTarget::Main => reveal_main(app),
+        FocusTarget::Launcher => raise(app, LAUNCHER_LABEL),
+        FocusTarget::Remote(label) => raise(app, &label),
+    }
+}
+
+/// Runs on the event-loop thread, so the dialog must stay non-blocking.
+pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
+    let state = app.state::<LauncherState>();
+    forget_focus(&mut state.focus_order.lock().unwrap(), label);
+    if !is_remote_label(label) {
+        return;
+    }
+    let exiting = state.exiting.load(Ordering::SeqCst)
+        || app.state::<crate::QuitState>().confirmed.load(Ordering::SeqCst);
+    let labels: Vec<String> = app.webview_windows().into_keys().collect();
+    let remaining = remote_count_excluding(labels.iter().map(String::as_str), label);
+    if !should_offer_return(remaining, main_visible(app), exiting) {
+        return;
+    }
+    let copy = state.copy.lock().unwrap().clone();
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+    let handle = app.clone();
+    app.dialog()
+        .message(copy.last_closed_prompt)
+        .title("VelaTerm")
+        .buttons(MessageDialogButtons::OkCancelCustom(copy.quit, copy.return_to_local))
+        .show(move |quit| {
+            if quit {
+                quit_without_prompt(&handle);
+            } else {
+                reveal_main(&handle);
+            }
+        });
+}
+
+/// A project open request skips the launcher, including one that arrives while the launcher is already up.
+pub(crate) fn leave_launcher_for_main(app: &AppHandle) {
+    reveal_main(app);
+    if let Some(win) = app.get_webview_window(LAUNCHER_LABEL) {
+        let _ = win.destroy();
+    }
 }
 
 #[tauri::command]
@@ -186,10 +263,7 @@ pub(crate) fn open_launcher(app: &AppHandle) -> tauri::Result<()> {
 
 #[tauri::command]
 pub fn launcher_choose_local(app: AppHandle) {
-    reveal_main(&app);
-    if let Some(win) = app.get_webview_window(LAUNCHER_LABEL) {
-        let _ = win.destroy();
-    }
+    leave_launcher_for_main(&app);
 }
 
 #[tauri::command]
@@ -311,5 +385,18 @@ mod tests {
         assert_eq!(pick_focus_target(false, true, &r), FocusTarget::Launcher);
         assert_eq!(pick_focus_target(false, false, &r), FocusTarget::Remote("ssh-new".into()));
         assert_eq!(pick_focus_target(false, false, &[]), FocusTarget::Main);
+    }
+
+    #[test]
+    fn focus_order_moves_refocused_window_to_newest_and_forgets_destroyed() {
+        let mut o = Vec::new();
+        push_focus(&mut o, "ssh-a");
+        push_focus(&mut o, "ssh-b");
+        push_focus(&mut o, "ssh-a");
+        assert_eq!(o, ["ssh-b", "ssh-a"]);
+        forget_focus(&mut o, "ssh-a");
+        assert_eq!(o, ["ssh-b"]);
+        push_focus(&mut o, "main");
+        assert_eq!(o, ["ssh-b"]);
     }
 }

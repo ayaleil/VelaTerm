@@ -253,15 +253,16 @@ pub fn open_project_from_args(args: &[String], cwd: &Path) -> Result<Option<Path
 }
 
 #[cfg(all(feature = "gui", not(debug_assertions)))]
-fn queue_open_project(app: &tauri::AppHandle, args: &[String], cwd: &str) {
+fn queue_open_project(app: &tauri::AppHandle, args: &[String], cwd: &str) -> bool {
     use tauri::Emitter;
     let Ok(Some(path)) = open_project_from_args(args, Path::new(cwd)) else {
-        return;
+        return false;
     };
     if let Some(pending) = app.try_state::<PendingOpenProject>() {
         *pending.0.lock().unwrap() = Some(path.to_string_lossy().into_owned());
     }
     let _ = app.emit("open-project://request", ());
+    true
 }
 
 /// Request from a remote-context window for the local backend to relay a native notification.
@@ -606,11 +607,10 @@ pub fn run(initial_open_project: Option<PathBuf>) {
     #[cfg(not(debug_assertions))]
     let builder =
         tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            queue_open_project(app, &args, &cwd);
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.unminimize();
-                let _ = win.show();
-                let _ = win.set_focus();
+            if queue_open_project(app, &args, &cwd) {
+                launcher::leave_launcher_for_main(app);
+            } else {
+                launcher::focus_preferred(app);
             }
         }));
     // Release builds use one GUI instance; development permits parallel worktree instances. Register
@@ -1333,6 +1333,13 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
         .run({
             use std::sync::atomic::Ordering;
             move |app, event| {
+                if let tauri::RunEvent::WindowEvent { label, event: window_event, .. } = &event {
+                    match window_event {
+                        tauri::WindowEvent::Focused(true) => launcher::note_focus(app, label),
+                        tauri::WindowEvent::Destroyed => launcher::on_window_destroyed(app, label),
+                        _ => {}
+                    }
+                }
                 match &event {
                     tauri::RunEvent::ExitRequested { code: None, api, .. }
                         if !app.state::<QuitState>().confirmed.load(Ordering::SeqCst) =>
@@ -1362,19 +1369,8 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
                             request_quit_confirmation(app);
                         }
                     }
-                    // The last remote window closing brings a hidden main window back.
-                    tauri::RunEvent::WindowEvent {
-                        label,
-                        event: tauri::WindowEvent::Destroyed,
-                        ..
-                    } if !app.state::<QuitState>().confirmed.load(Ordering::SeqCst) => {
-                        main_window::on_window_destroyed(app, label);
-                    }
-                    // A Dock click brings a hidden main window back.
                     #[cfg(target_os = "macos")]
-                    tauri::RunEvent::Reopen { .. } => {
-                        main_window::reveal_hidden_main(app);
-                    }
+                    tauri::RunEvent::Reopen { .. } => launcher::focus_preferred(app),
                     // Window activation leaves keyboard focus on the top-level HWND under the `unstable`
                     // child-webview path; hand it back to the webview the user was typing in.
                     #[cfg(target_os = "windows")]
