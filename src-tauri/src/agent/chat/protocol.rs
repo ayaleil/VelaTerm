@@ -13,6 +13,9 @@ use serde_json::{json, Value};
 /// the user turns confirmations off — is not among them, so it is translated rather than passed through.
 use crate::agent::permission_catalog::CLAUDE_MODES as CLI_PERMISSION_MODES;
 
+/// Longest session name taken from a reported title, matching the terminal-title rename.
+const MAX_TITLE_CHARS: usize = 80;
+
 /// Translate a session's stored permission mode into one the agent accepts, or None when nothing usable is
 /// stored; the caller then falls back to `default`, the same word the view shows.
 ///
@@ -160,6 +163,9 @@ pub enum Incoming {
     /// backgrounded. Keep the complete object so the engine can merge identity, status, and usage without
     /// making this wire parser mirror every optional field Claude adds to the task protocol.
     Task { subtype: String, message: Value },
+    /// The conversation's title changed (`/rename`, or a hook's `sessionTitle`). Trimmed, capped and never
+    /// empty. A resumed Claude also reports its stored title once at startup, before any prompt.
+    TitleChanged(String),
     /// A remark the agent made about its own run: a fallback model, a denied tool, a warning.
     Notice { id: String, message: String },
     /// A failed API call about to be retried. Transient: the next frame supersedes it.
@@ -231,6 +237,13 @@ pub fn parse_line(line: &str) -> Incoming {
                     };
                 }
                 Some("compact_boundary") => return parse_compact_boundary(v),
+                Some("session_title_changed") => {
+                    let title = v.get("title").and_then(Value::as_str).unwrap_or("").trim();
+                    // Cap by code points so a multi-byte character is never split.
+                    let title: String = title.chars().take(MAX_TITLE_CHARS).collect();
+                    let title = title.trim_end();
+                    return if title.is_empty() { Incoming::Other } else { Incoming::TitleChanged(title.to_string()) };
+                }
                 Some(subtype @ ("task_started" | "task_updated" | "task_progress" | "task_notification")) => {
                     return Incoming::Task { subtype: subtype.to_string(), message: v };
                 }
@@ -724,6 +737,21 @@ mod tests {
         assert_eq!(cli_permission_mode(None), None);
         assert_eq!(cli_permission_mode(Some("")), None);
         assert_eq!(cli_permission_mode(Some("nonsense")), None);
+    }
+
+    #[test]
+    fn title_frames_report_the_trimmed_title() {
+        let title = |line: &str| match parse_line(line) {
+            Incoming::TitleChanged(title) => Some(title),
+            _ => None,
+        };
+        assert_eq!(
+            title(r#"{"type":"system","subtype":"session_title_changed","title":"  Fix login bug \n"}"#),
+            Some("Fix login bug".into()),
+        );
+        assert_eq!(title(&format!(r#"{{"type":"system","subtype":"session_title_changed","title":"{}"}}"#, "é".repeat(90))), Some("é".repeat(80)));
+        assert_eq!(title(r#"{"type":"system","subtype":"session_title_changed","title":"   "}"#), None);
+        assert_eq!(title(r#"{"type":"system","subtype":"session_title_changed"}"#), None);
     }
 
     #[test]
