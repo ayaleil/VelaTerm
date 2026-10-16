@@ -326,7 +326,9 @@ pub(crate) fn quit_without_prompt(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(QUIT_SILENT_WATCHDOG);
-        app.state::<crate::QuitState>().confirmed.store(true, Ordering::SeqCst);
+        if !app.state::<crate::QuitState>().confirmed.swap(true, Ordering::SeqCst) {
+            crate::diagnostic_warn!("silent quit was not confirmed in time; forcing exit, the workspace snapshot may have been skipped");
+        }
         app.exit(0);
     });
 }
