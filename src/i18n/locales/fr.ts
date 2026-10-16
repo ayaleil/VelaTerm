@@ -2449,16 +2449,16 @@ const fr: typeof en = {
   "ports.limit": (max) => `Au maximum ${max} ports peuvent être transférés par connexion`, // At most {max} ports can be forwarded per connection
   "ports.notForwarded": (port) => `Le port ${port} n'est pas transféré`, // Port {port} is not forwarded
   "statusbar.ports": (n) => (n === 1 ? "1 port transféré" : `${n} ports transférés`), // {n} forwarded ports
-  "launcher.title": "How do you want to start?", // English
-  "launcher.local": "Local terminal", // English
-  "launcher.ssh": "Connect via SSH", // English
-  "launcher.back": "Back", // English
-  "hiddenMode.hidePrompt": "Hide the local window while you work over SSH?", // English
-  "hiddenMode.hide": "Hide", // English
-  "hiddenMode.keepOpen": "Keep open", // English
-  "hiddenMode.lastClosedPrompt": "No remote windows are open. Return to the local app or quit VelaTerm?", // English
-  "hiddenMode.returnToLocal": "Return to local app", // English
-  "hiddenMode.quit": "Quit VelaTerm", // English
+  "launcher.title": "Comment souhaitez-vous démarrer ?", // How do you want to start?
+  "launcher.local": "Terminal local", // Local terminal
+  "launcher.ssh": "Se connecter via SSH", // Connect via SSH
+  "launcher.back": "Retour", // Back
+  "hiddenMode.hidePrompt": "Masquer la fenêtre locale pendant que vous travaillez via SSH ?", // Hide the local window while you work over SSH?
+  "hiddenMode.hide": "Masquer", // Hide
+  "hiddenMode.keepOpen": "Garder ouverte", // Keep open
+  "hiddenMode.lastClosedPrompt": "Aucune fenêtre distante n'est ouverte. Revenir à l'application locale ou quitter VelaTerm ?", // No remote windows are open. Return to the local app or quit VelaTerm?
+  "hiddenMode.returnToLocal": "Revenir à l'application locale", // Return to local app
+  "hiddenMode.quit": "Quitter VelaTerm", // Quit VelaTerm
 };
 
 export default fr;
