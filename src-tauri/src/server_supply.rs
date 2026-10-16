@@ -1,5 +1,5 @@
-//! Client-side vela-server supply for GUI builds. Download the version/platform artifact from R2,
-//! verify its minisign signature and SHA-256, then cache it locally.
+//! Client-side vela-server supply for GUI builds. Download the version/platform artifact from the fork's GitHub
+//! release, verify its minisign signature and SHA-256, then cache it locally.
 //!
 //! Trust is rooted in the embedded minisign public key shared with automatic updates, not the manifest
 //! or network. Only signed artifacts enter the cache and they may be verified again before use.
@@ -18,8 +18,8 @@ use std::time::Duration;
 use base64::Engine;
 use serde::Deserialize;
 
-/// Distribution root shared with the updater.
-const DL_BASE: &str = "https://dl.velaterm.com";
+/// This fork's GitHub releases, which publish the vela-server artifacts and `server-manifest.json`.
+const RELEASES: &str = "https://github.com/eperfecto/VelaTerm/releases";
 
 /// Upstream's release key. The vela-server artifacts this module downloads from `DL_BASE` are published and
 /// signed by upstream, so verifying them keeps using upstream's key even in this fork. Tauri wraps the
@@ -291,9 +291,22 @@ pub fn sha256_hex(data: &[u8]) -> String {
     d.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+fn manifest_url(version: &str) -> String {
+    format!("{RELEASES}/download/v{version}/server-manifest.json")
+}
+
+fn latest_manifest_url() -> String {
+    format!("{RELEASES}/latest/download/server-manifest.json")
+}
+
+fn parse_manifest_version(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    value["version"].as_str().map(str::to_string)
+}
+
 /// Fetch server-manifest.json for a version.
 pub fn fetch_manifest(version: &str) -> Result<ServerManifest, String> {
-    let url = format!("{DL_BASE}/server/{version}/server-manifest.json");
+    let url = manifest_url(version);
     let body = ureq::get(&url)
         .timeout(Duration::from_secs(30))
         .call()
@@ -303,21 +316,14 @@ pub fn fetch_manifest(version: &str) -> Result<ServerManifest, String> {
     serde_json::from_str(&body).map_err(|e| format!("failed to parse server manifest: {e}"))
 }
 
-/// Newest published vela-server version: `server/latest.json`, falling back to the desktop updater's root
-/// `latest.json` for releases published before the server pointer existed.
+/// Newest published vela-server version, read from the manifest attached to the fork's latest release.
 pub fn fetch_latest_version() -> Result<String, String> {
-    let read = |path: &str| -> Option<String> {
-        let body = ureq::get(&format!("{DL_BASE}/{path}"))
-            .timeout(Duration::from_secs(30))
-            .call()
-            .ok()?
-            .into_string()
-            .ok()?;
-        let value: serde_json::Value = serde_json::from_str(&body).ok()?;
-        value["version"].as_str().map(str::to_string)
-    };
-    read("server/latest.json")
-        .or_else(|| read("latest.json"))
+    ureq::get(&latest_manifest_url())
+        .timeout(Duration::from_secs(30))
+        .call()
+        .ok()
+        .and_then(|r| r.into_string().ok())
+        .and_then(|body| parse_manifest_version(&body))
         .ok_or_else(|| "cannot determine the latest vela-server version".to_string())
 }
 
@@ -478,6 +484,36 @@ mod tests {
             sha256_hex(b""),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
+    }
+
+    #[test]
+    fn manifest_url_points_at_the_fork_release() {
+        assert_eq!(
+            manifest_url("0.2.15"),
+            "https://github.com/eperfecto/VelaTerm/releases/download/v0.2.15/server-manifest.json"
+        );
+    }
+
+    #[test]
+    fn latest_manifest_url_uses_the_latest_release() {
+        assert_eq!(
+            latest_manifest_url(),
+            "https://github.com/eperfecto/VelaTerm/releases/latest/download/server-manifest.json"
+        );
+    }
+
+    #[test]
+    fn latest_version_reads_the_manifest_version() {
+        assert_eq!(
+            parse_manifest_version(r#"{"version":"0.2.15","platforms":{}}"#).as_deref(),
+            Some("0.2.15")
+        );
+    }
+
+    #[test]
+    fn latest_version_rejects_missing_or_bad_json() {
+        assert_eq!(parse_manifest_version(r#"{"platforms":{}}"#), None);
+        assert_eq!(parse_manifest_version("not json"), None);
     }
 
     #[test]
