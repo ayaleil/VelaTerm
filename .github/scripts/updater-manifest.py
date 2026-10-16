@@ -23,8 +23,9 @@ import sys
 
 # Tauri's platform keys, matched against an artifact's file name. The updater asks for the key built from the
 # running target, so a missing entry means that platform silently never updates - hence the check below.
+# Windows ships min and full installers but a key holds one, so updates use full (see release.yml).
 TAURI_TARGETS = (
-    ("-setup.exe", "windows-x86_64"),
+    ("-full-setup.exe", "windows-x86_64"),
     (".app.tar.gz", "darwin-aarch64"),
 )
 
