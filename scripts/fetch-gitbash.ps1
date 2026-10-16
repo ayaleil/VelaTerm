@@ -186,8 +186,11 @@ $mtabPath = Join-Path $Staging 'etc\mtab'
 if (Test-Path -LiteralPath $mtabPath) { Remove-Item -LiteralPath $mtabPath -Force }
 [IO.File]::WriteAllText($mtabPath, $mtab, (New-Object Text.UTF8Encoding $false))
 #    13-copy-dlls hardlinks git.exe as the dlls-copied sentinel; the DLLs it links already ship in git-core.
-Copy-Item -LiteralPath (Join-Path $Staging 'mingw64\bin\git.exe') `
-  -Destination (Join-Path $Staging 'mingw64\libexec\git-core\dlls-copied.exe') -Force
+#    PortableGit may already ship the sentinel as a hardlink to git.exe, which Copy-Item rejects as copying a
+#    file onto itself, so remove it first; removing the link leaves git.exe intact.
+$sentinel = Join-Path $Staging 'mingw64\libexec\git-core\dlls-copied.exe'
+if (Test-Path -LiteralPath $sentinel) { Remove-Item -LiteralPath $sentinel -Force }
+Copy-Item -LiteralPath (Join-Path $Staging 'mingw64\bin\git.exe') -Destination $sentinel -Force
 #    99-post-install-cleanup and post-install.bat delete themselves. dev/ and tmp/ only hold empty directories,
 #    and the documentation is dropped to keep the installer small.
 foreach ($path in 'post-install.bat', 'etc\post-install', 'dev', 'tmp', 'mingw64\share\doc') {
