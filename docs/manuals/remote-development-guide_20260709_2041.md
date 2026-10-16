@@ -101,6 +101,8 @@ Enter `user@host[:port]` and click "Connect". Details worth knowing:
 
 Holding Option (Alt on Windows and Linux) while clicking the connect button shows one more option when mirroring is off, "Use remote desktop app's database". It lets the remote server open the remote desktop app's database without attaching to the running app. Keeping both on the same VelaTerm version is recommended.
 
+To find the remote desktop app, VelaTerm looks for its database first in the data directory that a desktop app of the same build as yours uses, then in the one official releases use (`io.vlinx.vlxterm.release`). This way a self-built desktop app on the remote machine is found too.
+
 **Recent hosts.** Hosts you have connected to are listed under "Recent hosts" ("Show all (N)" shows the full list). Clicking an entry only fills in the form; review it, then click "Connect". A key icon means a saved password, and × ("Forget this host") removes the host and its saved password.
 
 **Progress.** The first connection copies the server (tens of MB), and the button shows "Preparing server…", "Transferring server…" and "Starting server…" with a percentage. Later connections reuse the server that is already on the remote machine and are much faster.

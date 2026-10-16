@@ -150,7 +150,13 @@ pub struct RemoteSystem {
     pub raw: String,
     /// Command language used for every remote command on this host.
     pub shell: RemoteShell,
+    /// Identifier naming the remote desktop app's data directory. Starts as the official release one and is
+    /// resolved by [`resolve_desktop_id`] before any shared-database or mirror step.
+    pub desktop_id: String,
 }
+
+/// Data-directory identifier of official desktop releases and of the Electron sidecar build.
+const RELEASE_DESKTOP_ID: &str = "io.vlinx.vlxterm.release";
 
 impl RemoteSystem {
     /// Whether the remote runs Windows, where the server artifact carries an `.exe` suffix.
@@ -186,6 +192,7 @@ fn default_system() -> RemoteSystem {
         arch: "x86_64".to_string(),
         raw: String::new(),
         shell: RemoteShell::Posix,
+        desktop_id: RELEASE_DESKTOP_ID.to_string(),
     }
 }
 
@@ -641,6 +648,7 @@ fn parse_windows_probe(raw: &str) -> Option<RemoteSystem> {
         arch,
         raw: raw.to_string(),
         shell: RemoteShell::Powershell,
+        desktop_id: RELEASE_DESKTOP_ID.to_string(),
     })
 }
 
@@ -667,6 +675,7 @@ fn parse_uname(raw: &str) -> Option<RemoteSystem> {
         arch: arch.to_string(),
         raw: raw.to_string(),
         shell: RemoteShell::Posix,
+        desktop_id: RELEASE_DESKTOP_ID.to_string(),
     })
 }
 
@@ -1240,40 +1249,62 @@ struct RunState {
 /// (Cygwin/MSYS): the shell creates the directory under its own POSIX path, while `vela-server.exe` is a
 /// native Windows program that understands only `C:\…`, so the argument runs through `cygpath -w`.
 ///
-/// Isolated mode uses `~/.velaterm/data`; shared mode explicitly targets the remote desktop release
-/// directory, which the server's own identifier would never resolve to:
+/// Isolated mode uses `~/.velaterm/data`; shared mode explicitly targets the remote desktop app's data
+/// directory named by `desktop_id`, which the server's own identifier would never resolve to (shown for
+/// the official `io.vlinx.vlxterm.release`):
 ///   - Linux: `${XDG_DATA_HOME:-$HOME/.local/share}/io.vlinx.vlxterm.release`
 ///   - macOS: `$HOME/Library/Application Support/io.vlinx.vlxterm.release`
 ///   - Windows: `%APPDATA%\io.vlinx.vlxterm.release`
-fn serve_data_dir_expr(os: &str, shell: RemoteShell, shared_db: bool) -> (String, String) {
-    let same = |s: &str| (s.to_string(), s.to_string());
+fn serve_data_dir_expr(os: &str, shell: RemoteShell, shared_db: bool, desktop_id: &str) -> (String, String) {
+    let same = |s: String| (s.clone(), s);
     match (shell, os, shared_db) {
-        (RemoteShell::Powershell, _, false) => same("$env:USERPROFILE\\.velaterm\\data"),
-        (RemoteShell::Powershell, _, true) => same("$env:APPDATA\\io.vlinx.vlxterm.release"),
+        (RemoteShell::Powershell, _, false) => same("$env:USERPROFILE\\.velaterm\\data".to_string()),
+        (RemoteShell::Powershell, _, true) => same(format!("$env:APPDATA\\{desktop_id}")),
         (RemoteShell::Posix, "windows", false) => (
             "$HOME/.velaterm/data".to_string(),
             "$(cygpath -w \"$HOME/.velaterm/data\")".to_string(),
         ),
         (RemoteShell::Posix, "windows", true) => (
             // %APPDATA% is already a Windows path here, so create it through cygpath and pass it verbatim.
-            "$(cygpath -u \"$APPDATA\")/io.vlinx.vlxterm.release".to_string(),
-            "$APPDATA\\io.vlinx.vlxterm.release".to_string(),
+            format!("$(cygpath -u \"$APPDATA\")/{desktop_id}"),
+            format!("$APPDATA\\{desktop_id}"),
         ),
-        (RemoteShell::Posix, _, false) => same("$HOME/.velaterm/data"),
-        (RemoteShell::Posix, "macos", true) => {
-            same("$HOME/Library/Application Support/io.vlinx.vlxterm.release")
-        }
+        (RemoteShell::Posix, _, false) => same("$HOME/.velaterm/data".to_string()),
+        (RemoteShell::Posix, "macos", true) => same(format!("$HOME/Library/Application Support/{desktop_id}")),
         // Linux and other Unix fallback.
-        (RemoteShell::Posix, _, true) => {
-            same("${XDG_DATA_HOME:-$HOME/.local/share}/io.vlinx.vlxterm.release")
-        }
+        (RemoteShell::Posix, _, true) => same(format!("${{XDG_DATA_HOME:-$HOME/.local/share}}/{desktop_id}")),
     }
 }
 
-/// Shell-native path of the remote desktop release data directory, for file probes run by the shell
+/// Shell-native path of the remote desktop app's data directory, for file probes run by the shell
 /// itself (as opposed to the argument handed to `vela-server`, see `serve_data_dir_expr`).
 fn desktop_data_dir_expr(sys: &RemoteSystem) -> String {
-    serve_data_dir_expr(&sys.os, sys.shell, true).0
+    serve_data_dir_expr(&sys.os, sys.shell, true, &sys.desktop_id).0
+}
+
+/// Data-directory identifiers the remote desktop app may use, most likely first. A build of the same
+/// distribution as this client shares its identifier: a fork built without the release identity stores
+/// its data under `io.vlinx.vlxterm`, not `io.vlinx.vlxterm.release`. Official releases and the Electron
+/// sidecar use the release identifier, so it is always the fallback.
+fn desktop_id_candidates(own: &str) -> Vec<String> {
+    let mut ids = vec![own.to_string()];
+    if own != RELEASE_DESKTOP_ID {
+        ids.push(RELEASE_DESKTOP_ID.to_string());
+    }
+    ids
+}
+
+/// Point `sys` at the data directory of the remote desktop app: the first candidate that holds a
+/// database, or the most likely one when none does yet.
+fn resolve_desktop_id(t: &dyn SshTransport, sys: &mut RemoteSystem, own: &str) {
+    let candidates = desktop_id_candidates(own);
+    for id in &candidates {
+        sys.desktop_id = id.clone();
+        if desktop_db_exists(t, sys) {
+            return;
+        }
+    }
+    sys.desktop_id = candidates[0].clone();
 }
 
 /// Join a file name onto a shell-native directory expression with that shell's separator.
@@ -1392,7 +1423,7 @@ fn serve_script(
 ) -> String {
     let bin = sys.bin_path(version);
     let run = sys.run_json();
-    let (data_dir_mk, data_dir_arg) = serve_data_dir_expr(&sys.os, sys.shell, shared_db);
+    let (data_dir_mk, data_dir_arg) = serve_data_dir_expr(&sys.os, sys.shell, shared_db, &sys.desktop_id);
     // Embed shared_db and mirror directly as JSON true/false literals.
     let shared_json = if shared_db { "true" } else { "false" };
     let mirror_json = if mirror { "true" } else { "false" };
@@ -2297,7 +2328,7 @@ fn connect_inner(
 ) -> Result<ConnectResult, String> {
     let session = t.session();
     progress("probe", None);
-    let sys = probe_system(t)?;
+    let mut sys = probe_system(t)?;
     // Linux, macOS, and Windows are supported; each shell's command differences are handled by the
     // builders above. Anything else (BSD, Solaris, …) has no published vela-server artifact.
     if sys.os != "linux" && sys.os != "macos" && sys.os != "windows" {
@@ -2305,6 +2336,11 @@ fn connect_inner(
             "currently supports Linux, macOS and Windows remotes; detected remote is {} ({})",
             sys.os, sys.raw
         ));
+    }
+    // Shared-database and mirror steps look for the remote desktop app's data directory, whose name
+    // depends on how that app was built.
+    if shared_db || mirror {
+        resolve_desktop_id(t, &mut sys, &crate::serve_identifier());
     }
     // Every later step needs the detected shell, including disconnect and tunnel rebuild, which only carry
     // the session key.
@@ -2410,6 +2446,7 @@ mod tests {
             arch: arch.to_string(),
             raw: String::new(),
             shell,
+            desktop_id: RELEASE_DESKTOP_ID.to_string(),
         }
     }
 
@@ -2522,43 +2559,116 @@ mod tests {
         let posix = RemoteShell::Posix;
         // Isolated mode is always ~/.velaterm/data on Unix regardless of OS.
         assert_eq!(
-            serve_data_dir_expr("linux", posix, false),
+            serve_data_dir_expr("linux", posix, false, RELEASE_DESKTOP_ID),
             ("$HOME/.velaterm/data".into(), "$HOME/.velaterm/data".into())
         );
         assert_eq!(
-            serve_data_dir_expr("macos", posix, false),
+            serve_data_dir_expr("macos", posix, false, RELEASE_DESKTOP_ID),
             ("$HOME/.velaterm/data".into(), "$HOME/.velaterm/data".into())
         );
         // Shared mode uses each OS's desktop release data directory.
         assert_eq!(
-            serve_data_dir_expr("linux", posix, true).1,
+            serve_data_dir_expr("linux", posix, true, RELEASE_DESKTOP_ID).1,
             "${XDG_DATA_HOME:-$HOME/.local/share}/io.vlinx.vlxterm.release"
         );
         assert_eq!(
-            serve_data_dir_expr("macos", posix, true).1,
+            serve_data_dir_expr("macos", posix, true, RELEASE_DESKTOP_ID).1,
             "$HOME/Library/Application Support/io.vlinx.vlxterm.release"
         );
         // Native Windows uses %USERPROFILE% / %APPDATA% and needs no conversion.
         let ps = RemoteShell::Powershell;
         assert_eq!(
-            serve_data_dir_expr("windows", ps, false),
+            serve_data_dir_expr("windows", ps, false, RELEASE_DESKTOP_ID),
             (
                 "$env:USERPROFILE\\.velaterm\\data".into(),
                 "$env:USERPROFILE\\.velaterm\\data".into()
             )
         );
         assert_eq!(
-            serve_data_dir_expr("windows", ps, true).1,
+            serve_data_dir_expr("windows", ps, true, RELEASE_DESKTOP_ID).1,
             "$env:APPDATA\\io.vlinx.vlxterm.release"
         );
         // Windows behind a POSIX shell creates the directory with a POSIX path but hands the native
         // vela-server.exe a Windows one.
-        let (mk, arg) = serve_data_dir_expr("windows", posix, false);
+        let (mk, arg) = serve_data_dir_expr("windows", posix, false, RELEASE_DESKTOP_ID);
         assert_eq!(mk, "$HOME/.velaterm/data");
         assert_eq!(arg, "$(cygpath -w \"$HOME/.velaterm/data\")");
-        let (mk, arg) = serve_data_dir_expr("windows", posix, true);
+        let (mk, arg) = serve_data_dir_expr("windows", posix, true, RELEASE_DESKTOP_ID);
         assert_eq!(mk, "$(cygpath -u \"$APPDATA\")/io.vlinx.vlxterm.release");
         assert_eq!(arg, "$APPDATA\\io.vlinx.vlxterm.release");
+        // A fork desktop built with the plain identifier keeps its data under that name instead.
+        assert_eq!(
+            serve_data_dir_expr("macos", posix, true, "io.vlinx.vlxterm").1,
+            "$HOME/Library/Application Support/io.vlinx.vlxterm"
+        );
+        assert_eq!(
+            serve_data_dir_expr("windows", ps, true, "io.vlinx.vlxterm").1,
+            "$env:APPDATA\\io.vlinx.vlxterm"
+        );
+    }
+
+    /// Answers the desktop database probe with `yes` only for the directories listed in `dbs`.
+    struct DbProbeTransport {
+        dbs: Vec<&'static str>,
+    }
+
+    impl SshTransport for DbProbeTransport {
+        fn exec(&self, cmd: &str) -> Result<String, String> {
+            let hit = self.dbs.iter().any(|id| cmd.contains(&format!("/{id}/vlx-term.db")));
+            Ok(if hit { "yes".to_string() } else { String::new() })
+        }
+        fn exec_input(&self, _cmd: &str, _input: &str) -> Result<String, String> {
+            Ok(String::new())
+        }
+        fn upload(&self, _local: &Path, _remote_rel: &str, _progress: Progress) -> Result<(), String> {
+            unreachable!()
+        }
+        fn open_forward(&self, _rport: u16) -> Result<u16, String> {
+            unreachable!()
+        }
+        fn open_user_forward(&self, _rport: u16, _preferred_lport: Option<u16>) -> Result<u16, String> {
+            unreachable!()
+        }
+        fn close_forward(&self, _lport: u16) -> Result<(), String> {
+            unreachable!()
+        }
+        fn close(&self) {}
+        fn session(&self) -> &str {
+            "test"
+        }
+    }
+
+    #[test]
+    fn desktop_id_candidates_try_the_client_identity_before_the_release_one() {
+        assert_eq!(
+            desktop_id_candidates("io.vlinx.vlxterm"),
+            vec!["io.vlinx.vlxterm".to_string(), RELEASE_DESKTOP_ID.to_string()]
+        );
+        assert_eq!(desktop_id_candidates(RELEASE_DESKTOP_ID), vec![RELEASE_DESKTOP_ID.to_string()]);
+    }
+
+    #[test]
+    fn resolve_desktop_id_picks_the_directory_that_holds_the_desktop_database() {
+        let fork = "io.vlinx.vlxterm";
+        let resolve = |dbs: Vec<&'static str>, own: &str| {
+            let mut sys = sys_of("macos", "aarch64", RemoteShell::Posix);
+            resolve_desktop_id(&DbProbeTransport { dbs }, &mut sys, own);
+            sys.desktop_id
+        };
+        // A fork desktop's database wins even when an empty release directory was created earlier.
+        assert_eq!(resolve(vec![fork, RELEASE_DESKTOP_ID], fork), fork);
+        // An official desktop (or the Electron sidecar) on the remote is still found from a fork client.
+        assert_eq!(resolve(vec![RELEASE_DESKTOP_ID], fork), RELEASE_DESKTOP_ID);
+        // Without any desktop database the client's own identity is the most likely future location.
+        assert_eq!(resolve(vec![], fork), fork);
+        // Official clients behave exactly as before.
+        assert_eq!(resolve(vec![], RELEASE_DESKTOP_ID), RELEASE_DESKTOP_ID);
+        // The chosen directory drives the shared database and the mirror's local-link probe.
+        let mut sys = sys_of("macos", "aarch64", RemoteShell::Posix);
+        resolve_desktop_id(&DbProbeTransport { dbs: vec![fork] }, &mut sys, fork);
+        assert_eq!(desktop_data_dir_expr(&sys), "$HOME/Library/Application Support/io.vlinx.vlxterm");
+        assert!(serve_script(&sys, "0.1.73", "pw123", 42000, true, true)
+            .contains("--data-dir \"$HOME/Library/Application Support/io.vlinx.vlxterm\""));
     }
 
     #[test]
