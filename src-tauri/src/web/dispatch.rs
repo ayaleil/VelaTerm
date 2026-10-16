@@ -1245,6 +1245,8 @@ fn dispatch_inner(app: &AppCtx, cmd: &str, args: &Value, source: &str, origin: C
             &req_str(args, "baseUrl")?,
             &req_str(args, "token")?,
         )),
+        // Web page of `origin` for the project menu's Open Repository; None without a network remote.
+        "git_repo_web_url" => to_value(git::web_url::repo_web_url(&req_str(args, "cwd")?)),
         // Git panel pull requests through Gitea: availability, then push + open into the compare base.
         "git_pr_provider" => to_value(core::git_pr_provider(app, &req_str(args, "cwd")?)),
         "git_open_pull_request" => to_value(core::git_open_pull_request(
@@ -2492,6 +2494,7 @@ mod tests {
         // Pull requests read `origin` and push through git; they name no file.
         "git_pr_provider",
         "git_open_pull_request",
+        "git_repo_web_url", // reads `origin` through git; names no file
         "create_worktree",   // git-mediated, refused outside a repository
         "list_worktrees",
         "commit_worktree",   // git-mediated mutation, refused outside a repository

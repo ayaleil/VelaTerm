@@ -1045,6 +1045,8 @@ const zhCN: typeof en = {
   "tree.sessionInfo": "会话信息",
   "tree.groupInfo": "分组信息",
   "tree.collectionInfo": "集合信息",
+  "tree.openRepository": "打开仓库",
+  "tree.openRepositoryNoRemote": "此项目的 Git 仓库没有网页地址：请添加指向服务器的 origin 远程仓库。",
   "tree.projectInfo": "项目信息",
   "info.branch": "分支",
   "info.path": "路径",

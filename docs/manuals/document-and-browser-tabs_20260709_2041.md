@@ -60,6 +60,7 @@ Browser tabs show real web pages inside VelaTerm, which is useful for keeping do
 - the ⌘⇧B shortcut;
 - `vopen <URL>` in a session;
 - "New Browser Page" in a project's or group's context menu in the sidebar.
+- "Open Repository" in a Git project's context menu, which opens the web page of the project's `origin` remote (GitHub, GitLab, Bitbucket, Azure DevOps, Gitea or any other host) so you can check pull requests, workflows or issues. SSH remotes open over `https` on the same host. Like the button, it opens a browser tab that is not saved in the project tree. In a remote connection window, which has no browser tabs, the same item opens the page in the system browser instead.
 
 **Toolbar:** "Back", "Forward", "Reload" (or "Stop loading" while a page loads), an address bar ("Enter URL or search terms"; text that is not an address is searched on Google), "Open in system browser", and a "Quick access" row with ChatGPT, Claude, Gemini and Google.
 

@@ -1065,6 +1065,8 @@ const fr: typeof en = {
   "tree.sessionInfo": "Infos de session", // Session Info
   "tree.groupInfo": "Infos du groupe", // Group Info
   "tree.collectionInfo": "Infos de la collection", // Collection Info
+  "tree.openRepository": "Ouvrir le dépôt", // Open Repository
+  "tree.openRepositoryNoRemote": "Le dépôt Git de ce projet n'a pas d'adresse web : ajoutez un dépôt distant origin qui pointe vers un serveur.", // No web address for origin
   "tree.projectInfo": "Infos du projet", // Project Info
   "info.branch": "Branche", // Branch
   "info.path": "Chemin", // Path

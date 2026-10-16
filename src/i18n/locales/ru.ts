@@ -1074,6 +1074,8 @@ const ru: typeof en = {
   "tree.sessionInfo": "Сведения о сессии", // Session Info
   "tree.groupInfo": "Сведения о группе", // Group Info
   "tree.collectionInfo": "Сведения о коллекции", // Collection Info
+  "tree.openRepository": "Открыть репозиторий", // Open Repository
+  "tree.openRepositoryNoRemote": "У Git-репозитория этого проекта нет веб-адреса: добавьте удалённый репозиторий origin, указывающий на сервер.", // No web address for origin
   "tree.projectInfo": "Сведения о проекте", // Project Info
   "info.branch": "Ветка", // Branch
   "info.path": "Путь", // Path
