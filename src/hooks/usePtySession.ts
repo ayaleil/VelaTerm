@@ -449,6 +449,12 @@ export function usePtySession(session: Session, cwd?: string, hidden?: boolean) 
       swallowReplies: () => replaying || modeRef.current === "mirror",
       swallowClipboardWrites: () => replaying,
     });
+    // Let the session follow the title its program sets (Claude). Only the owner applies it, and never from
+    // replayed history, so a reload does not revert a newer name.
+    const titleSub = term.onTitleChange((title) => {
+      if (replaying || modeRef.current === "mirror") return;
+      void useTermStore.getState().applyTerminalTitle(session.id, title).catch(() => {});
+    });
 
     // Never fit a display:none/zero-width container. xterm silently shrinks to two columns and
     // permanently hard-wraps history rather than throwing.
@@ -985,6 +991,7 @@ export function usePtySession(session: Session, cwd?: string, hidden?: boolean) 
       unlistenReattach?.();
       unlistenReattachStart?.();
       disposeReplyGuard();
+      titleSub.dispose();
       unregisterSearch(session.id, searchAddon);
       unregisterRedraw(session.id, hardRedraw);
       unregisterTerminal(session.id, term);
