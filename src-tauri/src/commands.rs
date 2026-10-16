@@ -823,7 +823,7 @@ pub async fn open_account_remote_window(
 pub(crate) fn remote_window_count(app: &AppHandle) -> usize {
     app.webview_windows()
         .keys()
-        .filter(|label| crate::main_window::is_remote_window_label(label))
+        .filter(|label| crate::launcher::is_remote_label(label))
         .count()
 }
 

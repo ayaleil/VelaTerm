@@ -47,6 +47,8 @@ pub mod diagnostics;
 #[cfg(feature = "gui")]
 mod main_window;
 #[cfg(feature = "gui")]
+mod launcher;
+#[cfg(feature = "gui")]
 mod native_menu;
 #[cfg(feature = "gui")]
 mod native_drop;
@@ -645,6 +647,7 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
         .manage(web::local_link::LocalLinkServer::new())
         .manage(browser::BrowserManager::new())
         .manage(QuitState::default())
+        .manage(launcher::LauncherState::default())
         .manage(NativeTheme::default())
         .manage(PendingOpenProject(std::sync::Mutex::new(
             initial_open_project.map(|p| p.to_string_lossy().into_owned()),
