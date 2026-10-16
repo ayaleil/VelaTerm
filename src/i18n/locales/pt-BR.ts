@@ -428,6 +428,8 @@ const ptBR: typeof en = {
   "titlebar.themeDark": "Escuro", // Dark
   "titlebar.themeClassicDark": "Escuro clássico", // Classic Dark
   "titlebar.themeLight": "Claro", // Light
+  "titlebar.enterFullscreen": "Entrar em tela cheia", // Enter full screen
+  "titlebar.exitFullscreen": "Sair da tela cheia", // Exit full screen
   "titlebar.gameCenter": "Central de jogos",
   "titlebar.browser": "Navegador integrado", // Built-in Browser
   "titlebar.remoteAccess": "Acesso remoto (navegador)", // Remote Access (Browser)

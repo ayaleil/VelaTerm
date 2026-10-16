@@ -427,6 +427,8 @@ const de: typeof en = {
   "titlebar.themeDark": "Dunkel", // Dark
   "titlebar.themeClassicDark": "Dunkel (klassisch)", // Classic Dark
   "titlebar.themeLight": "Hell", // Light
+  "titlebar.enterFullscreen": "Vollbild aktivieren", // Enter full screen
+  "titlebar.exitFullscreen": "Vollbild beenden", // Exit full screen
   "titlebar.gameCenter": "Spielecenter",
   "titlebar.browser": "Integrierter Browser", // Built-in Browser
   "titlebar.remoteAccess": "Fernzugriff (Browser)", // Remote Access (Browser)

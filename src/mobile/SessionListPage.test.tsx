@@ -16,6 +16,7 @@ vi.mock("../notify", () => ({
   getEffectiveNotifyPermission: vi.fn().mockResolvedValue("granted"),
   requestEffectiveNotifyPermission: vi.fn().mockResolvedValue("granted"),
 }));
+vi.mock("../hooks/useFullscreen", () => ({ useFullscreen: () => ({ supported: true, active: false, toggle: vi.fn() }) }));
 
 import { useTermStore } from "../store/termStore";
 import type { Project, Session } from "../types";
@@ -80,5 +81,10 @@ describe("mobile status chips", () => {
     act(() => useTermStore.setState((s) => ({ runtimes: { ...s.runtimes, later: working } })));
 
     expect(screen.queryByText("later")).toBeNull();
+  });
+
+  it("offers the fullscreen toggle in the header for plain browser access", () => {
+    render(<SessionListPage onOpen={() => {}} />);
+    expect(screen.getByRole("banner").querySelector(".m-fullscreen")?.getAttribute("aria-label")).toBe("Enter full screen");
   });
 });

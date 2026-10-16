@@ -1,4 +1,5 @@
 import { ConnectionMenuEntry } from "./ConnectionMenuEntry";
+import { FullscreenToggle } from "../components/FullscreenToggle";
 //! Second-level screen: a full-screen session with header, MobileTerminal, and KeyBar.
 //!
 //! Pin the container to `visualViewport.height`. The iOS keyboard overlays rather than shrinking
@@ -114,6 +115,7 @@ export function TerminalPage({
           className="vlx-btn m-session-view-link">
           {tr(historyView ? "session.showTerminal" : "session.showConversation")}
         </MobileSessionLink>}
+        <FullscreenToggle className="m-fullscreen" iconSize={16} />
         {(window as Window & { __VELATERM_CONNECTION_MENU__?: boolean }).__VELATERM_CONNECTION_MENU__ && <details className="m-menu">
           <summary aria-label={tr("mobile.more")}>•••</summary>
           <div className="m-menu-items"><ConnectionMenuEntry /></div>

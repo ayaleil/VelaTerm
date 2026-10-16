@@ -427,6 +427,8 @@ const vi: typeof en = {
   "titlebar.themeDark": "Tối",
   "titlebar.themeClassicDark": "Tối cổ điển",
   "titlebar.themeLight": "Sáng",
+  "titlebar.enterFullscreen": "Vào chế độ toàn màn hình",
+  "titlebar.exitFullscreen": "Thoát chế độ toàn màn hình",
   "titlebar.gameCenter": "Trung tâm trò chơi",
   "titlebar.browser": "Trình duyệt tích hợp",
   "titlebar.remoteAccess": "Truy cập từ xa (Trình duyệt)",

@@ -428,6 +428,8 @@ const fr: typeof en = {
   "titlebar.themeDark": "Sombre", // Dark
   "titlebar.themeClassicDark": "Sombre classique", // Classic Dark
   "titlebar.themeLight": "Clair", // Light
+  "titlebar.enterFullscreen": "Passer en plein écran", // Enter full screen
+  "titlebar.exitFullscreen": "Quitter le plein écran", // Exit full screen
   "titlebar.gameCenter": "Centre de jeux",
   "titlebar.browser": "Navigateur intégré", // Built-in Browser
   "titlebar.remoteAccess": "Accès distant (navigateur)", // Remote Access (Browser)

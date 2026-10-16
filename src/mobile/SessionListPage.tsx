@@ -1,4 +1,5 @@
 import { ConnectionMenuEntry } from "./ConnectionMenuEntry";
+import { FullscreenToggle } from "../components/FullscreenToggle";
 import { apiUrl, isShareSurface } from "../ipc/shareBase";
 import { sharedSessionUrl } from "../sharing/sessionNavigation";
 //! First-level screen showing projects, nested groups, sessions, and nested child sessions. The
@@ -378,6 +379,7 @@ export function SessionListPage({ onOpen, loading=false, error=null, onRefresh }
           VelaTerm
         </span>
         <span className="m-sp" />
+        <FullscreenToggle className="m-fullscreen" iconSize={16} />
         <details className="m-menu">
           <summary aria-label={tr("mobile.more")}>•••</summary>
           <div className="m-menu-items">
