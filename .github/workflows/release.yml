@@ -1,13 +1,14 @@
 # Packaging pipeline for the fork.
 #
-# Upstream's own release driver (scripts/release.sh) and its Git Bash fetcher (scripts/fetch-gitbash.ps1) are
-# referenced by electron-builder.yml and scripts/dev-desktop.sh but are not published in the repository, so
-# this workflow reimplements the parts a fork needs instead of calling them:
+# Upstream's own release driver (scripts/release.sh) is referenced by electron-builder.yml but is not published
+# in the repository, so this workflow reimplements the parts a fork needs instead of calling it. Its Git Bash
+# fetcher was not published either; scripts/fetch-gitbash.ps1 is the fork's reimplementation.
 #
 #   · linux-appimage — the Electron edition, which is the only desktop app Linux ships. Its backend is the
 #     `sidecar` Cargo build (no Tauri/WebKit/GTK), so the AppImage runs on hosts without WebKitGTK. The
 #     frontend is built first because rust-embed resolves ../dist at compile time for release profiles.
 #   · windows-nsis / macos-dmg — the Tauri edition, built natively so no Rust cross-toolchain is involved.
+#     Windows ships two installers like upstream: `min` bundles a trimmed Git Bash, `full` all of PortableGit.
 #
 # Each job uploads its artifact. A tag push additionally attaches every artifact to a GitHub release.
 name: Release
@@ -99,8 +100,13 @@ jobs:
           if-no-files-found: error
 
   windows-nsis:
-    name: windows installer (Tauri)
+    name: windows installer (Tauri, ${{ matrix.variant }} Git Bash)
     runs-on: windows-latest
+    # One variant failing should not cancel the other's build; publish still needs both to succeed.
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [min, full]
     steps:
       - uses: actions/checkout@v7
 
@@ -116,20 +122,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: windows-gui-release
+          key: windows-gui-release-${{ matrix.variant }}
 
       - run: pnpm install --frozen-lockfile
 
-      # tauri.windows.conf.json bundles src-tauri/resources/gitbash/**/*, which is gitignored and produced by
-      # the unpublished scripts/fetch-gitbash.ps1. The glob must resolve twice: tauri_build reads it in
-      # build.rs, and the bundler reads it again when packaging. The placeholder satisfies both; Git Bash is
-      # genuinely absent either way, so terminal sessions fall back to PowerShell (see agent/gitbash.rs).
-      - name: Provide a placeholder for the unpublished Git Bash resource
-        shell: bash
-        run: |
-          mkdir -p src-tauri/resources/gitbash
-          echo "Placeholder so the bundle resource glob resolves in CI. Not a real Git Bash tree." \
-            > src-tauri/resources/gitbash/CI-PLACEHOLDER.txt
+      # tauri.windows.conf.json bundles src-tauri/resources/gitbash/**/*, which is gitignored and must exist
+      # before the build: tauri_build resolves the glob in build.rs, and the bundler resolves it again when
+      # packaging. The script pins PortableGit by SHA-256 and fails the job on a mismatch.
+      - name: Bundle Git Bash (${{ matrix.variant }})
+        run: pwsh scripts/fetch-gitbash.ps1 -Variant ${{ matrix.variant }}
 
       # createUpdaterArtifacts in tauri.conf.json makes this emit the `.sig` next to each installer; the key
       # has to be present at build time because Tauri signs the updater artifact as it bundles it.
@@ -139,9 +140,31 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm tauri build
 
+      # Both variants come out with the same file names, which would collide in the release, so they are
+      # renamed after upstream's assets. Each `.sig` follows its artifact: the updater manifest pairs them by name.
+      # With createUpdaterArtifacts and every bundle target enabled, Tauri signs the MSI as well as the NSIS
+      # installer, so a missing signature on either means signing broke and fails the job.
+      - name: Name the installers after the variant
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          move_with_sig() {
+            local matches=("$1"/*"$2")
+            if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
+              echo "expected exactly one *$2 in $1, found: ${matches[*]}" >&2; exit 1
+            fi
+            [ -f "${matches[0]}.sig" ] || { echo "${matches[0]} has no .sig; was signing enabled?" >&2; exit 1; }
+            mv "${matches[0]}" "$1/$3"
+            mv "${matches[0]}.sig" "$1/$3.sig"
+          }
+          bundle=src-tauri/target/release/bundle
+          move_with_sig "$bundle/nsis" -setup.exe "velaterm-x64-$VARIANT-setup.exe"
+          move_with_sig "$bundle/msi" .msi "velaterm-x64-$VARIANT.msi"
+
       - uses: actions/upload-artifact@v7
         with:
-          name: windows-nsis
+          name: windows-nsis-${{ matrix.variant }}
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.sig
@@ -206,7 +229,8 @@ jobs:
 
       # The Tauri updater reads one manifest covering every platform, so it can only be assembled once all
       # three builds have uploaded. The script exits non-zero rather than publishing an empty manifest, which
-      # would leave Windows and macOS silently never updating.
+      # would leave Windows and macOS silently never updating. The manifest holds one Windows installer, and it
+      # points at `full`: an update replaces the whole install, and only `full` keeps ssh and git working.
       - name: Write the Tauri update manifest
         run: |
           python3 -I .github/scripts/updater-manifest.py tauri artifacts \

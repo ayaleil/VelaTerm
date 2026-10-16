@@ -28,7 +28,8 @@ source "$(dirname "$0")/dev-lib.sh"
 [ -d node_modules ] || { echo "==> node_modules is missing, running pnpm install first"; pnpm install; }
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
-    if [ ! -f src-tauri/resources/gitbash/usr/bin/bash.exe ]; then
+    if [ ! -f src-tauri/resources/gitbash/usr/bin/bash.exe ] \
+      || [ ! -f src-tauri/resources/gitbash/VLX_GITBASH_VERSION.txt ]; then
       if [ -f scripts/fetch-gitbash.ps1 ]; then
         echo "==> resources/gitbash is empty, fetching the minimal Git Bash first (fetch-gitbash.ps1)"
         powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-gitbash.ps1 \
