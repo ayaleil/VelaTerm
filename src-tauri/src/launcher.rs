@@ -270,12 +270,13 @@ pub(crate) fn open_launcher(app: &AppHandle) -> tauri::Result<()> {
         .initialization_script("window.__VLX_LAUNCHER__=true;")
         .disable_drag_drop_handler()
         .build()?;
-    // Programmatic closes use destroy(), which skips CloseRequested, so this only sees the user's X.
+    // Programmatic closes use destroy(), which skips CloseRequested, so this only sees the user's X. The shared
+    // quit path quits silently at the launcher stage but still confirms when a remote window would die.
     let handle = app.clone();
     win.on_window_event(move |event| {
         if let WindowEvent::CloseRequested { api, .. } = event {
             api.prevent_close();
-            quit_without_prompt(&handle);
+            crate::request_quit_confirmation(&handle);
         }
     });
     Ok(())
