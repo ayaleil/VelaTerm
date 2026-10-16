@@ -686,10 +686,12 @@ export function LeftSidebar() {
     const sep: MenuItem = { label: "", separator: true };
     const rename: MenuItem = { label: t("common.rename"), onClick: () => startRename(node) };
 
-    // Open Repository loads origin's web page (pull requests, workflows, issues) in a browser tab. It needs a native
-    // child WebView, like New Browser Page, and appears once the folder is known to be a Git repository.
+    // Open Repository loads origin's web page (pull requests, workflows, issues). The desktop app uses a built-in
+    // browser tab; remote connection windows have no child WebView, so they hand the URL to the system browser.
+    // Plain browser clients are left out because a popup opened after the async lookup is blocked. The item
+    // appears once the folder is known to be a Git repository.
     const openRepositoryItems = (root: string | null): MenuItem[] => {
-      if (!root || !(env.isTauri || env.isElectron)) return [];
+      if (!root || !env.hasNativeHost) return [];
       const info = peekGitBranchInfo(root);
       if (info === undefined) prefetchGitBranchInfo(root);
       if (!info?.isRepo) return [];
@@ -699,8 +701,9 @@ export function LeftSidebar() {
         onClick: () => {
           void gitRepoWebUrl(root)
             .then((url) => {
-              if (url) useTermStore.getState().openBrowserTab(url);
-              else useTermStore.setState({ treeMutationError: t("tree.openRepositoryNoRemote") });
+              if (!url) useTermStore.setState({ treeMutationError: t("tree.openRepositoryNoRemote") });
+              else if (env.isTauri || env.isElectron) useTermStore.getState().openBrowserTab(url);
+              else return platform.opener.openExternal(url);
             })
             .catch((error) => useTermStore.setState({ treeMutationError: error instanceof Error ? error.message : String(error) }));
         },

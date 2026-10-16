@@ -61,7 +61,8 @@ const gitMocks = vi.hoisted(() => ({
   isRepo: true as boolean | undefined,
   gitRepoWebUrl: vi.fn<(cwd: string) => Promise<string | null>>(),
 }));
-const envState = vi.hoisted(() => ({ isTauri: true, isElectron: false }));
+const envState = vi.hoisted(() => ({ isTauri: true, isElectron: false, hasNativeHost: true }));
+const openExternal = vi.hoisted(() => vi.fn<(url: string) => Promise<void>>());
 
 vi.mock("../../i18n", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../i18n")>()),
@@ -79,7 +80,7 @@ vi.mock("../../store/termStore", () => {
 });
 vi.mock("../../platform", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../platform")>();
-  return { ...actual, env: new Proxy(actual.env, { get: (target, key) => key in envState ? envState[key as keyof typeof envState] : Reflect.get(target, key) }) };
+  return { ...actual, platform: { ...actual.platform, opener: { ...actual.platform.opener, openExternal } }, env: new Proxy(actual.env, { get: (target, key) => key in envState ? envState[key as keyof typeof envState] : Reflect.get(target, key) }) };
 });
 vi.mock("../../ipc/commands", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../ipc/commands")>()),
@@ -146,6 +147,8 @@ describe("LeftSidebar Open Repository", () => {
     storeState.treeMutationError = null;
     envState.isTauri = true;
     envState.isElectron = false;
+    envState.hasNativeHost = true;
+    openExternal.mockReset().mockResolvedValue(undefined);
   });
 
   it("opens the origin web page of the project in a browser tab", async () => {
@@ -157,6 +160,7 @@ describe("LeftSidebar Open Repository", () => {
     await waitFor(() =>
       expect(storeState.openBrowserTab).toHaveBeenCalledWith("https://github.com/owner/repo"),
     );
+    expect(openExternal).not.toHaveBeenCalled();
     expect(gitMocks.gitRepoWebUrl).toHaveBeenCalledWith("/tmp/project");
     expect(storeState.treeMutationError).toBeNull();
   });
@@ -182,8 +186,20 @@ describe("LeftSidebar Open Repository", () => {
     expect(screen.queryByRole("button", { name: "tree.openRepository" })).toBeNull();
   });
 
-  it("is hidden in clients without native browser tabs", () => {
+  it("opens the page in the system browser from a remote connection window", async () => {
     envState.isTauri = false;
+    gitMocks.gitRepoWebUrl.mockResolvedValue("https://github.com/owner/repo");
+    openProjectMenu();
+
+    fireEvent.click(screen.getByRole("button", { name: "tree.openRepository" }));
+
+    await waitFor(() => expect(openExternal).toHaveBeenCalledWith("https://github.com/owner/repo"));
+    expect(storeState.openBrowserTab).not.toHaveBeenCalled();
+  });
+
+  it("is hidden in plain browser clients without a native host", () => {
+    envState.isTauri = false;
+    envState.hasNativeHost = false;
     openProjectMenu();
     expect(screen.queryByRole("button", { name: "tree.openRepository" })).toBeNull();
   });
