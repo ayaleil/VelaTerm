@@ -940,6 +940,9 @@ struct ChatProcess {
     callbacks: RwLock<()>,
     expected_native: Option<String>,
     identity_checked: AtomicBool,
+    /// Whether a prompt has been written. A resumed Claude reports its stored title before the first one;
+    /// only titles after it are renames.
+    prompted: AtomicBool,
     owner: Mutex<Option<super::ownership::Owner>>,
     kind: SessionKind,
     cwd: Option<String>,
@@ -1576,6 +1579,7 @@ impl ChatManager {
             callbacks: RwLock::new(()),
             expected_native: resume.filter(|_| !fork).map(str::to_owned),
             identity_checked: AtomicBool::new(false),
+            prompted: AtomicBool::new(false),
             owner: Mutex::new(Some(owner)),
             kind,
             bin: bin.to_string(),
@@ -3873,6 +3877,7 @@ fn handle_line(app: &AppCtx, session_id: &str, proc: &Arc<ChatProcess>, line: &s
             }));
             emit_extras(app, session_id, proc);
         }
+        Incoming::TitleChanged(title) => adopt_reported_title(app, session_id, proc, &title),
         Incoming::Notification { text, priority, timeout_ms } => {
             emit(
                 app,
@@ -5571,7 +5576,34 @@ fn write_claude_user_message(app: &AppCtx, session_id: &str, proc: &ChatProcess,
             message["uuid"]=json!(native);
         }
     }
-    proc.write(&message)
+    proc.write(&message)?;
+    proc.prompted.store(true,Ordering::Relaxed);
+    Ok(())
+}
+
+/// Follow the title Claude reports, so `/rename` or a hook's `sessionTitle` renames the session as the
+/// terminal title does for a terminal-driven one. A title reported before the first prompt is a resumed
+/// conversation replaying its stored title, and would undo a rename made here.
+fn adopt_reported_title(app: &AppCtx, session_id: &str, proc: &ChatProcess, title: &str) {
+    if !proc.prompted.load(Ordering::Relaxed) {
+        return;
+    }
+    let renamed = {
+        let conn = app.db().conn.lock().unwrap();
+        match crate::db::repo::get_session_name(&conn, session_id) {
+            Ok(Some(name)) if name != title => crate::db::repo::rename_node(
+                &conn,
+                crate::models::NodeKind::Session,
+                session_id,
+                title,
+            )
+            .is_ok(),
+            _ => false,
+        }
+    };
+    if renamed {
+        app.emit(crate::host::TREE_CHANGED, ());
+    }
 }
 
 /// Submit a prompt to the active turn without changing its clock or draining its queue.
@@ -6385,6 +6417,7 @@ mod tests {
             callbacks: RwLock::new(()),
             expected_native: None,
             identity_checked: AtomicBool::new(false),
+            prompted: AtomicBool::new(false),
             owner: Mutex::new(None),
             kind,
             bin: "true".into(),
@@ -7578,6 +7611,7 @@ mod tests {
             callbacks: RwLock::new(()),
             expected_native: None,
             identity_checked: AtomicBool::new(false),
+            prompted: AtomicBool::new(false),
             owner: Mutex::new(None),
             kind: SessionKind::Claude,
             bin: "true".into(),
@@ -8464,6 +8498,38 @@ mod tests {
             assert_eq!(stored_title(&app), "修复会话标题");
             assert_eq!(events.load(Ordering::Relaxed), 1);
         }
+    }
+
+    fn title_changed(title: &str) -> String {
+        json!({"type":"system","subtype":"session_title_changed","title":title,"session_id":"thread-test"}).to_string()
+    }
+
+    #[test]
+    fn claude_title_changes_rename_the_chat_session() {
+        let (app, manager, events) = title_fixture("title-reported", SessionKind::Claude, "Claude 1");
+        let proc = manager.get("s").unwrap();
+        manager.send(&app, "s", "first prompt", Vec::new(), "queue").unwrap();
+        assert_eq!(stored_title(&app), "first prompt");
+        let before = events.load(Ordering::Relaxed);
+        handle_line(&app, "s", &proc, &title_changed("Fix login bug"));
+        assert_eq!(stored_title(&app), "Fix login bug");
+        assert_eq!(events.load(Ordering::Relaxed), before + 1);
+        // Repeating the current title neither saves nor broadcasts.
+        handle_line(&app, "s", &proc, &title_changed("Fix login bug"));
+        assert_eq!(events.load(Ordering::Relaxed), before + 1);
+    }
+
+    #[test]
+    fn claude_title_replayed_before_the_first_prompt_keeps_the_session_name() {
+        let (app, manager, events) = title_fixture("title-replayed", SessionKind::Claude, "my name");
+        let proc = manager.get("s").unwrap();
+        // A resumed Claude reports its stored title at startup, before anything is sent.
+        handle_line(&app, "s", &proc, &title_changed("Old Claude title"));
+        assert_eq!(stored_title(&app), "my name");
+        assert_eq!(events.load(Ordering::Relaxed), 0);
+        manager.send(&app, "s", "/rename New title", Vec::new(), "queue").unwrap();
+        handle_line(&app, "s", &proc, &title_changed("New title"));
+        assert_eq!(stored_title(&app), "New title");
     }
 
     #[test]
