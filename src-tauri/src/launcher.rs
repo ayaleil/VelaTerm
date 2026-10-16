@@ -119,9 +119,11 @@ pub(crate) fn hide_main<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// A missing main window counts as visible, so nothing waits for it to come back; a window whose visibility
+/// cannot be read counts as hidden.
 pub(crate) fn main_visible<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.get_webview_window(MAIN_LABEL)
-        .map_or(true, |win| win.is_visible().unwrap_or(true))
+        .map_or(true, |win| win.is_visible().unwrap_or(false))
 }
 
 fn close_launcher<R: Runtime>(app: &AppHandle<R>) -> bool {
@@ -209,10 +211,7 @@ pub(crate) fn offers_return<R: Runtime>(app: &AppHandle<R>, destroyed: &str, mai
 pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
     let state = app.state::<LauncherState>();
     forget_focus(&mut state.focus_order.lock().unwrap(), label);
-    let main_shown = app
-        .get_webview_window(MAIN_LABEL)
-        .map_or(true, |win| win.is_visible().unwrap_or(false));
-    if !offers_return(app, label, main_shown) {
+    if !offers_return(app, label, main_visible(app)) {
         return;
     }
     let copy = state.copy.lock().unwrap().clone();
