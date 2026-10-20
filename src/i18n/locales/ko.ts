@@ -1061,6 +1061,7 @@ const ko: typeof en = {
   "tree.groupInfo": "그룹 정보", // Group Info
   "tree.collectionInfo": "컬렉션 정보", // Collection Info
   "tree.openRepository": "저장소 열기", // Open Repository
+  "tree.openInVSCode": "VS Code에서 열기", // Open in VS Code
   "tree.openRepositoryNoRemote": "이 프로젝트의 Git 저장소에 웹 주소가 없습니다. 서버를 가리키는 origin 원격을 추가하세요.", // No web address for origin
   "tree.projectInfo": "프로젝트 정보", // Project Info
   "info.branch": "브랜치", // Branch

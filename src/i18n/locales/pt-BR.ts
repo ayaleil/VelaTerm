@@ -1066,6 +1066,7 @@ const ptBR: typeof en = {
   "tree.groupInfo": "Informações do grupo", // Group Info
   "tree.collectionInfo": "Informações da coleção", // Collection Info
   "tree.openRepository": "Abrir repositório", // Open Repository
+  "tree.openInVSCode": "Abrir no VS Code", // Open in VS Code
   "tree.openRepositoryNoRemote": "O repositório Git deste projeto não tem endereço web: adicione um remoto origin que aponte para um servidor.", // No web address for origin
   "tree.projectInfo": "Informações do projeto", // Project Info
   "info.branch": "Ramo", // Branch
