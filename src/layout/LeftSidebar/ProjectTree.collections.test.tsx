@@ -381,3 +381,46 @@ describe("other projects section", () => {
     );
   });
 });
+
+describe("status filter and terminals", () => {
+  const session = (id: string, projectId: string, name: string, kind: string) => ({
+    id, projectId, groupId: null, parentSessionId: null, name, kind, collapsed: false, sortOrder: 0, createdAt: 0,
+  });
+  const statusView = (treeFilter = "") => {
+    const base = handlers();
+    return {
+      ...base,
+      view: {
+        ...base.view,
+        treeFilter,
+        statusFilter: ["working", "asking", "waiting"] as ["working", "asking", "waiting"],
+        statusFilterIds: { s1: true as const },
+      },
+    };
+  };
+
+  beforeEach(() => {
+    mocks.state.sessions = [
+      session("s1", "p-api", "busy-agent", "claude"),
+      session("s2", "p-notes", "idle-agent", "claude"),
+      session("t1", "p-web", "dev-server", "terminal"),
+    ];
+  });
+
+  it("keeps terminals under their project while a status filter is active", () => {
+    const { container } = render(<ProjectTree {...statusView()} />);
+    expect(names(container)).toContain("dev-server");
+    expect(names(container)).toContain("payments-web");
+  });
+
+  it("still hides agent sessions outside the status snapshot", () => {
+    const { container } = render(<ProjectTree {...statusView()} />);
+    expect(names(container)).toContain("busy-agent");
+    expect(names(container)).not.toContain("idle-agent");
+  });
+
+  it("applies the search text to terminals too", () => {
+    const { container } = render(<ProjectTree {...statusView("busy")} />);
+    expect(names(container)).not.toContain("dev-server");
+  });
+});
