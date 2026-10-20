@@ -1266,30 +1266,31 @@ fn open_login_window(
     };
     // Grant the same minimal runtime capability as open_remote_window, scoped to this loopback window.
     use tauri::ipc::CapabilityBuilder;
-    app.add_capability(
-        CapabilityBuilder::new(format!("connection-caps-{label}"))
-            .window(label.clone())
-            .remote("http://127.0.0.1:*".to_string())
-            .permission("local-fonts:allow-catalog")
-            .permission("local-download:allow-start")
-            .permission("local-download:allow-cancel")
-            .permission("clipboard-manager:allow-write-text")
-            .permission("clipboard-manager:allow-write-image")
-            .permission("notification:default")
-            .permission("opener:allow-open-url")
-            .permission("opener:allow-default-urls")
-            // "Open in VS Code" hands Remote-SSH deep links to the client's VS Code.
-            .permission_scoped(
-                "opener:allow-open-url",
-                vec![serde_json::json!({ "url": "vscode://vscode-remote/*" })],
-                vec![],
-            )
-            .permission("core:event:allow-listen")
-            .permission("core:event:allow-unlisten")
-            .permission("core:event:allow-emit")
-            .permission("core:window:allow-set-focus"),
-    )
-    .map_err(|e| format!("Failed to grant connection window capability: {e}"))?;
+    let mut caps = CapabilityBuilder::new(format!("connection-caps-{label}"))
+        .window(label.clone())
+        .remote("http://127.0.0.1:*".to_string())
+        .permission("local-fonts:allow-catalog")
+        .permission("local-download:allow-start")
+        .permission("local-download:allow-cancel")
+        .permission("clipboard-manager:allow-write-text")
+        .permission("clipboard-manager:allow-write-image")
+        .permission("notification:default")
+        .permission("opener:allow-open-url")
+        .permission("opener:allow-default-urls")
+        .permission("core:event:allow-listen")
+        .permission("core:event:allow-unlisten")
+        .permission("core:event:allow-emit")
+        .permission("core:window:allow-set-focus");
+    // "Open in VS Code" hands Remote-SSH deep links to the client's VS Code; only SSH windows offer it.
+    if matches!(kind, RemoteWindowKind::Ssh) {
+        caps = caps.permission_scoped(
+            "opener:allow-open-url",
+            vec![serde_json::json!({ "url": "vscode://vscode-remote/*" })],
+            vec![],
+        );
+    }
+    app.add_capability(caps)
+        .map_err(|e| format!("Failed to grant connection window capability: {e}"))?;
 
     let layout = crate::window_layout::policy();
     let win = with_download_handler(tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::External(parsed)))
