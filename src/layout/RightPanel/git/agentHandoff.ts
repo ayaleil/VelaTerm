@@ -12,7 +12,7 @@ import { ptyWrite } from "../../../ipc/commands";
 import { kindLabel } from "../../sessionMenuShared";
 import { createSubmission, deliverSubmission } from "../../CenterPane/session/outbox";
 import { useTermStore } from "../../../store/termStore";
-import type { Session } from "../../../types";
+import { isAgentKind, type Session } from "../../../types";
 
 export interface AgentHandoff {
   /** Display name of the agent, for button labels. */
@@ -25,7 +25,7 @@ export interface AgentHandoff {
 /** The handoff for a session, or null when it has no agent that can take a request right now. */
 export function useAgentHandoff(session: Session | undefined): AgentHandoff | null {
   const running = useTermStore((s) => (session ? s.runtimes[session.id]?.status === "running" : false));
-  if (!session || session.kind === "terminal" || session.kind === "browser") return null;
+  if (!session || !isAgentKind(session.kind)) return null;
   const id = session.id;
   const label = kindLabel(session.kind);
   const reveal = () => useTermStore.getState().openSession(id);

@@ -17,6 +17,7 @@ import {
 import {
   collectionsFirst,
   effectiveStatus,
+  isAgentKind,
   isVirtualProject,
   type Group,
   type NodeKind,
@@ -399,10 +400,9 @@ export function ProjectTree(h: TreeHandlers) {
 
   // Status filtering uses the snapshot captured when enabled. Subsequent status changes update dots but do not add
   // or remove rows until the filter changes, preventing an Awaiting item from disappearing as soon as it is opened.
-  // Terminals and browser sessions carry no agent status, so they would never enter the snapshot; keep them
-  // under their project.
-  const statusMatch = (s: Session) =>
-    s.kind === "terminal" || s.kind === "browser" || (!!statusFilterIds && s.id in statusFilterIds);
+  // Sessions without an agent (terminals, browser pages) carry no agent status, so they would never enter the
+  // snapshot; keep them under their project.
+  const statusMatch = (s: Session) => !isAgentKind(s.kind) || (!!statusFilterIds && s.id in statusFilterIds);
 
   // Status and marker are alternatives, not an intersection: with both active a session qualifies on either one.
   const attributeMatch = (s: Session) =>

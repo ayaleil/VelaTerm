@@ -20,6 +20,11 @@ export type AgentKind = "claude" | "codex" | "opencode" | "copilot" | "cursor" |
  */
 export type SessionKind = "terminal" | "claude" | "codex" | "opencode" | "copilot" | "cursor" | "antigravity" | "cline" | "pi" | "omp" | "crush" | "kimi" | "kiro" | "grok" | "zoo" | "browser";
 
+/** Whether a session of this kind runs an agent; terminals and browser pages have no agent behind them. */
+export function isAgentKind(kind: SessionKind): boolean {
+  return kind !== "terminal" && kind !== "browser";
+}
+
 /** Agents with permission controls. Claude/Codex/OpenCode obtain their choices from the backend;
  * other supported agents expose a bypass switch. OpenCode injects configuration rather than a flag. */
 export const PERMISSION_TOGGLE_KINDS: SessionKind[] = ["claude", "codex", "opencode", "copilot", "cursor", "antigravity", "cline", "omp", "crush", "kimi", "kiro", "grok", "zoo"];
