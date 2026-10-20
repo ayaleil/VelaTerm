@@ -413,6 +413,12 @@ describe("status filter and terminals", () => {
     expect(names(container)).toContain("payments-web");
   });
 
+  it("keeps browser sessions under their project while a status filter is active", () => {
+    mocks.state.sessions = [...(mocks.state.sessions as unknown[]), session("b1", "p-notes", "docs-page", "browser")];
+    const { container } = render(<ProjectTree {...statusView()} />);
+    expect(names(container)).toContain("docs-page");
+  });
+
   it("still hides agent sessions outside the status snapshot", () => {
     const { container } = render(<ProjectTree {...statusView()} />);
     expect(names(container)).toContain("busy-agent");
