@@ -19,13 +19,13 @@ import { useEffect, useState } from "react";
 
 import { t } from "../../i18n";
 import { readAgentTranscript, type TranscriptMessage } from "../../ipc/commands";
-import type { Session } from "../../types";
+import { isAgentKind, type Session } from "../../types";
 import { RecordingViewer } from "./RecordingViewer";
 import { TranscriptViewer } from "./TranscriptViewer";
 
 /** Whether this session type inherently lacks an agent transcript and should use recording playback. */
 function hasNoTranscript(kind: Session["kind"]): boolean {
-  return kind === "terminal" || kind === "browser";
+  return !isAgentKind(kind);
 }
 
 interface SessionContentProps {
