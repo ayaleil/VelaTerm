@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { remoteSshTarget, vscodeRemoteUri } from "./vscodeRemote";
+import { remoteSshTarget } from "../ipc/transport";
+import { vscodeRemoteUri } from "./vscodeRemote";
 
 const hex = (value: string) =>
   Array.from(new TextEncoder().encode(value), (b) => b.toString(16).padStart(2, "0")).join("");

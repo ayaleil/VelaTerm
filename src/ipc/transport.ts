@@ -52,6 +52,15 @@ export const remoteSshSession: string | null =
 export const remoteConnectionKind: "ssh" | "wsl" =
   typeof window !== "undefined" && (window as any).__VLX_REMOTE__?.transport === "wsl" ? "wsl" : "ssh";
 
+/** SSH target (`user@host[:port]`) of an SSH connection window, read at call time with the same session/kind
+ *  rules as above; null for WSL windows, paired URLs, and plain browsers. */
+export function remoteSshTarget(): string | null {
+  if (typeof window === "undefined") return null;
+  const remote = (window as any).__VLX_REMOTE__;
+  if (!remote?.session || remote.transport === "wsl" || typeof remote.address !== "string") return null;
+  return remote.address || null;
+}
+
 // PTY launch arguments and results.
 
 export interface PtySpawnArgs {

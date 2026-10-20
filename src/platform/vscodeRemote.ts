@@ -4,15 +4,6 @@
 //! `vscode://vscode-remote/ssh-remote+<authority><path>` asks the client's VS Code (with the Remote-SSH
 //! extension) to connect to the same SSH target and open the folder there.
 
-/** SSH target (`user@host[:port]`) of the current SSH connection window; null elsewhere (WSL, paired URLs, local). */
-export function remoteSshTarget(): string | null {
-  if (typeof window === "undefined") return null;
-  const remote = (window as { __VLX_REMOTE__?: { address?: unknown; session?: unknown; transport?: unknown } })
-    .__VLX_REMOTE__;
-  if (!remote?.session || remote.transport !== "ssh" || typeof remote.address !== "string") return null;
-  return remote.address || null;
-}
-
 /** Remote-SSH authority. `host:port` is not understood there, so a port uses the hex-encoded JSON form. */
 function sshAuthority(target: string): string {
   // Same split as `split_ssh_target` in the backend: a numeric final segment is the port.
