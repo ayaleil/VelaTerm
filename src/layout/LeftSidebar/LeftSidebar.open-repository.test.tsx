@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const menuMocks = vi.hoisted(() => ({
   newSessionItems: vi.fn(
@@ -202,5 +202,52 @@ describe("LeftSidebar Open Repository", () => {
     envState.hasNativeHost = false;
     openProjectMenu();
     expect(screen.queryByRole("button", { name: "tree.openRepository" })).toBeNull();
+  });
+});
+
+describe("LeftSidebar Open in VS Code", () => {
+  const w = window as unknown as { __VLX_REMOTE__?: unknown };
+
+  beforeEach(() => {
+    gitMocks.isRepo = false;
+    envState.isTauri = false;
+    envState.hasNativeHost = true;
+    storeState.treeMutationError = null;
+    openExternal.mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    delete w.__VLX_REMOTE__;
+  });
+
+  it("opens the project on the connected SSH host in the client's VS Code", async () => {
+    w.__VLX_REMOTE__ = { address: "edu@server", session: "s1", transport: "ssh" };
+    openProjectMenu();
+
+    fireEvent.click(screen.getByRole("button", { name: "tree.openInVSCode" }));
+
+    await waitFor(() =>
+      expect(openExternal).toHaveBeenCalledWith("vscode://vscode-remote/ssh-remote+edu@server/tmp/project"),
+    );
+  });
+
+  it("reports a failure to hand the link to VS Code", async () => {
+    w.__VLX_REMOTE__ = { address: "edu@server", session: "s1", transport: "ssh" };
+    openExternal.mockRejectedValue(new Error("no handler"));
+    openProjectMenu();
+
+    fireEvent.click(screen.getByRole("button", { name: "tree.openInVSCode" }));
+
+    await waitFor(() => expect(storeState.treeMutationError).toBe("no handler"));
+  });
+
+  it("is hidden outside SSH connection windows", () => {
+    envState.isTauri = true;
+    openProjectMenu();
+    expect(screen.queryByRole("button", { name: "tree.openInVSCode" })).toBeNull();
+    cleanup();
+
+    w.__VLX_REMOTE__ = { address: "Ubuntu", session: "s1", transport: "wsl" };
+    openProjectMenu();
+    expect(screen.queryByRole("button", { name: "tree.openInVSCode" })).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import { ContextMenu, type MenuItem } from "../../components/ContextMenu";
 import Icons from "../../components/Icons";
 import { useT } from "../../i18n";
 import { env, platform } from "../../platform";
+import { remoteSshTarget, vscodeRemoteUri } from "../../platform/vscodeRemote";
 import { gitRepoWebUrl } from "../../ipc/commands";
 import { knowledgeUrl } from "../Knowledge/navigation";
 import { securityUrl } from "../Security/navigation";
@@ -710,6 +711,21 @@ export function LeftSidebar() {
       }];
     };
 
+    // Open in VS Code: in an SSH connection window the folder lives on the server, so the client's VS Code
+    // opens it through Remote-SSH against the same target this window is connected to.
+    const openInVSCodeItems = (root: string | null): MenuItem[] => {
+      const target = remoteSshTarget();
+      if (!root || !target || !env.hasNativeHost) return [];
+      return [{
+        label: t("tree.openInVSCode"),
+        icon: <Icons.code size={14} />,
+        onClick: () => {
+          void platform.opener.openExternal(vscodeRemoteUri(target, root))
+            .catch((error) => useTermStore.setState({ treeMutationError: error instanceof Error ? error.message : String(error) }));
+        },
+      }];
+    };
+
     if (node.kind === "project") {
       const st = useTermStore.getState();
       const project = st.projects.find((p) => p.id === node.projectId);
@@ -749,6 +765,7 @@ export function LeftSidebar() {
           ],
         },
         ...openRepositoryItems(projectRoot(project)),
+        ...openInVSCodeItems(projectRoot(project)),
         {
           label: virtual ? t("tree.collectionInfo") : t("tree.projectInfo"),
           onClick: () => openDialog({ type: "projectInfo", id: node.id }),

@@ -1278,6 +1278,12 @@ fn open_login_window(
             .permission("notification:default")
             .permission("opener:allow-open-url")
             .permission("opener:allow-default-urls")
+            // "Open in VS Code" hands Remote-SSH deep links to the client's VS Code.
+            .permission_scoped(
+                "opener:allow-open-url",
+                vec![serde_json::json!({ "url": "vscode://vscode-remote/*" })],
+                vec![],
+            )
             .permission("core:event:allow-listen")
             .permission("core:event:allow-unlisten")
             .permission("core:event:allow-emit")
