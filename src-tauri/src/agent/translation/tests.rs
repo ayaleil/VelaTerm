@@ -31,6 +31,17 @@ fn google_configuration_needs_no_service_or_agent_and_survives_reload() {
 }
 
 #[test]
+fn bing_configuration_needs_no_service_or_agent_and_survives_reload() {
+    let (dir,app,_sid)=fixture();
+    assert!(config::settings(&app,true).unwrap()["engines"].as_array().unwrap().contains(&json!("bing")));
+    config::save(&app,&json!({"engine":"bing"})).unwrap();
+    let cfg=config::read_config(&app.db().conn.lock().unwrap()).unwrap();
+    assert!(engine_ready(&app,&cfg).is_ok());assert!(cfg.agent.is_empty());assert!(cfg.service_id.is_empty());
+    let reopened=crate::db::Db::open(&dir.0.join("test.db")).unwrap();
+    assert_eq!(config::read_config(&reopened.conn.lock().unwrap()).unwrap().engine,"bing");
+}
+
+#[test]
 #[ignore = "Explicit live check of the anonymous Google endpoint; never runs in the default suite."]
 fn google_live_translation_preserves_structure_and_reuses_cache() {
     let (_dir,app,_sid)=fixture();config::save(&app,&json!({"engine":"google"})).unwrap();
@@ -48,11 +59,29 @@ fn google_live_translation_preserves_structure_and_reuses_cache() {
 }
 
 #[test]
+#[ignore = "Explicit live check of the anonymous Bing endpoint; never runs in the default suite."]
+fn bing_live_translation_preserves_structure_and_reuses_cache() {
+    let (_dir,app,_sid)=fixture();config::save(&app,&json!({"engine":"bing"})).unwrap();
+    let cfg=config::read_config(&app.db().conn.lock().unwrap()).unwrap();
+    let original="# 你好世界\n\n请保留 `request_id` 和 https://example.com/a?q=1&x=2。\n```rs\nlet x = 1;\n```\n";
+    let first=translate(&app,&cfg,"auto","en",original,"live-bing").unwrap();
+    assert_eq!(first.source_language,"zh-CN");assert_ne!(first.translated(),original);
+    assert_eq!(first.pairs.iter().map(|p|p.original.as_str()).collect::<Vec<_>>().join("\n"),original);
+    assert!(first.translated().contains("`request_id`"));assert!(first.translated().contains("https://example.com/a?q=1&x=2"));
+    assert!(first.translated().contains("```rs\nlet x = 1;\n```"));
+    let second=translate(&app,&cfg,"auto","en",original,"live-bing-cache").unwrap();assert_eq!(first.translated(),second.translated());
+    let test=translate(&app,&cfg,"en","de","Connection test.","connection-test-bing").unwrap();
+    assert!(!test.translated().trim().is_empty());assert_ne!(test.translated(),"Connection test.");
+    println!("Bing live check: {} / {}",first.source_language,test.translated());
+}
+
+#[test]
 fn conversation_scope_migrates_validates_and_survives_reload() {
     let (dir,app,sid)=fixture();
     let legacy=json!({"enabled":true,"engine":"agent","agent":"codex","model":"","serviceId":"","version":2,"generation":3,"enabledSince":1});
     app.db().conn.lock().unwrap().execute("INSERT INTO translation_config(id,value) VALUES(1,?1)",[legacy.to_string()]).unwrap();
     let initial=config::settings(&app,false).unwrap();
+    assert_eq!(initial["config"]["defaultEnabled"],true);
     let supported=initial["conversationKinds"].as_array().unwrap().iter().map(|kind|kind["id"].clone()).collect::<Vec<_>>();
     assert_eq!(initial["config"]["conversationKinds"],json!(supported));
     assert!(supported.contains(&json!("antigravity")));assert!(!supported.contains(&json!("grok")));
@@ -262,7 +291,7 @@ fn another_session(app: &AppCtx,existing: &str) -> String {
 }
 
 #[test]
-fn global_enable_starts_existing_and_new_conversations_with_translation_on() {
+fn global_enable_preserves_explicit_switches_and_new_conversations_default_on() {
     let (dir,app,first)=fixture();config::enable(&app,true).unwrap();let second=another_session(&app,&first);
     assert!(config::read_preferences(&app.db().conn.lock().unwrap(),&first).unwrap().outgoing);
     assert!(config::read_preferences(&app.db().conn.lock().unwrap(),&second).unwrap().outgoing);
@@ -273,10 +302,56 @@ fn global_enable_starts_existing_and_new_conversations_with_translation_on() {
     config::enable(&app,false).unwrap();assert!(guard_original(&app,&second,&json!({"text":"Hello"})).is_ok());
     config::enable(&app,true).unwrap();
     let enabled=config::read_preferences(&app.db().conn.lock().unwrap(),&first).unwrap();
-    assert!(enabled.outgoing);assert!(!enabled.replies);assert_eq!(enabled.target,"en");assert_eq!(enabled.reply_target,"de");
+    assert!(!enabled.outgoing);assert!(!enabled.replies);assert_eq!(enabled.target,"en");assert_eq!(enabled.reply_target,"de");
     let third=another_session(&app,&first);assert!(session_state(&app,&third).unwrap()["preferences"]["outgoing"].as_bool().unwrap());
     drop(app);let db=crate::db::Db::open(&dir.0.join("test.db")).unwrap();
-    for id in [&first,&second,&third] {assert!(config::read_preferences(&db.conn.lock().unwrap(),id).unwrap().outgoing);}
+    assert!(!config::read_preferences(&db.conn.lock().unwrap(),&first).unwrap().outgoing);
+    for id in [&second,&third] {assert!(config::read_preferences(&db.conn.lock().unwrap(),id).unwrap().outgoing);}
+}
+
+#[test]
+fn default_switch_controls_inherited_preferences_and_preserves_explicit_choices_after_restart() {
+    use crate::web::dispatch::{dispatch as call,CallOrigin};
+    let (dir,app,first)=fixture();config::enable(&app,true).unwrap();
+    let mut explicit=config::Preferences::default();explicit.target="en".into();explicit.reply_target="de".into();
+    config::session_save(&app,&first,&json!(explicit)).unwrap();
+    let inherited=another_session(&app,&first);
+    call(&app,"translation_set_default_enabled",&json!({"enabled":false}),"test",CallOrigin::Remote).unwrap();
+    let prefs=session_state(&app,&inherited).unwrap();
+    assert_eq!(prefs["enabled"],true);assert_eq!(prefs["preferences"]["outgoing"],false);assert_eq!(prefs["preferences"]["replies"],false);
+    assert_eq!(prefs["preferences"]["target"],"en");assert_eq!(prefs["preferences"]["replyTarget"],"de");
+    assert!(guard_original(&app,&inherited,&json!({"text":"Hello"})).is_ok());
+    assert!(guard_original(&app,&first,&json!({"text":"Hello"})).is_err());
+    let paused=another_session(&app,&first);let mut explicit=config::read_preferences(&app.db().conn.lock().unwrap(),&paused).unwrap();
+    explicit.outgoing=false;explicit.replies=false;config::session_save(&app,&paused,&json!(explicit)).unwrap();
+    // An older provider draft cannot overwrite the independently saved default.
+    config::save(&app,&json!({"engine":"google","defaultEnabled":true})).unwrap();
+    config::enable(&app,false).unwrap();config::enable(&app,true).unwrap();
+    assert_eq!(config::settings(&app,false).unwrap()["config"]["defaultEnabled"],false);
+    drop(app);let db=crate::db::Db::open(&dir.0.join("test.db")).unwrap();
+    let reopened=AppCtx::Headless(std::sync::Arc::new(crate::host::HeadlessHost::new(dir.0.clone(),db)));
+    assert_eq!(session_state(&reopened,&inherited).unwrap()["preferences"]["outgoing"],false);
+    let new_session=another_session(&reopened,&first);
+    assert_eq!(session_state(&reopened,&new_session).unwrap()["preferences"]["replies"],false);
+    config::set_default_enabled(&reopened,true).unwrap();
+    for id in [&first,&inherited,&new_session] {
+        let prefs=session_state(&reopened,id).unwrap()["preferences"].clone();
+        assert_eq!(prefs["outgoing"],true);assert_eq!(prefs["replies"],true);
+    }
+    let prefs=session_state(&reopened,&paused).unwrap()["preferences"].clone();assert_eq!(prefs["outgoing"],false);assert_eq!(prefs["replies"],false);
+}
+
+#[test]
+fn default_switch_validates_input_and_rolls_back_failed_saves() {
+    use crate::web::dispatch::{dispatch as call,CallOrigin};
+    let (_dir,app,_sid)=fixture();
+    for args in [json!({}),json!({"enabled":null}),json!({"enabled":"false"})] {
+        assert_eq!(call(&app,"translation_set_default_enabled",&args,"test",CallOrigin::Local).unwrap_err(),"translation:configuration");
+    }
+    config::set_default_enabled(&app,true).unwrap();
+    app.db().conn.lock().unwrap().execute_batch("CREATE TRIGGER fail_default_switch BEFORE INSERT ON translation_config BEGIN SELECT RAISE(ABORT,'fixture'); END;").unwrap();
+    assert!(config::set_default_enabled(&app,false).is_err());
+    assert_eq!(config::settings(&app,true).unwrap()["config"]["defaultEnabled"],true);
 }
 
 #[test]

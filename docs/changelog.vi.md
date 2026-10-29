@@ -1,3 +1,69 @@
+## v0.2.14 — 2026-10-23
+
+- 🔌 Kết nối từ xa không còn ngắt và kết nối lại mỗi giây khi đang mở nhiều cuộc hội thoại dài, nên các cuộc hội thoại đó lại mở được bình thường.
+- ⏹️ Khi đang kết nối SSH và WSL, nút “Dừng” sẽ hiện ra để bạn dừng ở bất kỳ giai đoạn nào, kể cả khi đang chuẩn bị máy chủ; trong lúc kết nối, nút “Hủy” trong hộp thoại mật khẩu cũng dừng kết nối.
+- 🌿 Cây phiên và nhãn nhánh không còn làm dồn ứ các tiến trình Git trong kho lớn, và các lượt đọc Git chạy nền sẽ dừng sau 30 giây thay vì bị treo.
+- 🧩 Bảng Git làm mới nhanh hơn nhiều trong các kho có submodule: chỉnh sửa bên trong một submodule không còn khiến submodule đó xuất hiện trong kho cha, còn submodule trỏ tới commit mới vẫn được liệt kê.
+- 📁 Có thể kéo nhóm sang dự án khác cùng với các nhóm lồng nhau và phiên bên trong, và sau đó các phiên này sẽ khởi động trong thư mục của dự án mới.
+- ⏳ Khi mở một cuộc hội thoại dài, chỉ báo nhỏ “Đang tải cuộc trò chuyện…” sẽ hiện ra thay cho “Lịch sử vẫn đang được lập chỉ mục”.
+- 🖱️ Menu ngữ cảnh của phiên hiển thị “Dừng tiến trình” khi tiến trình của phiên đang chạy, kể cả tiến trình được khởi động từ một máy khách khác, và ẩn mục này khi tiến trình đã kết thúc.
+
+## v0.2.13 — 2026-10-22
+
+- 📱 Trên điện thoại, các tác tử chạy ở chế độ terminal mở thẳng vào terminal, kèm ô nhập nổi để soạn hoặc đọc chính tả cả tin nhắn; các nút nhỏ “Bản ghi” và “Terminal” ở đầu trang dùng để chuyển qua lại giữa hai màn hình, và bản ghi không còn gợi ý chuyển sang chế độ hội thoại.
+- 🔑 Qua kết nối chia sẻ, chủ sở hữu máy chủ có thể mở terminal của các tác tử chạy ở chế độ terminal và nhập vào đó, danh sách phiên cũng hiển thị các tác tử không có chế độ hội thoại như Kiro; tài khoản được mời vẫn chỉ xem bản ghi ở dạng chỉ đọc.
+- 🌐 Dịch thủ công một câu trả lời trong phiên đang nhàn rỗi sẽ hiển thị bản dịch thay vì thông báo “Không thể dịch”.
+- 📜 Khi bạn cuộn lên trong một cuộc hội thoại dài, câu trả lời mới không còn bị giữ lại sau “Tải các tin nhắn mới hơn”, và khi cuộn xuống từ lịch sử cũ hơn, các tin nhắn mới hơn sẽ tự động được tải.
+- 🧭 Giao diện điện thoại không còn tùy chọn “Chuyển sang giao diện máy tính”, và các điện thoại đã chuyển trước đó sẽ tự động quay lại giao diện điện thoại.
+- 🧹 Bản ghi chạy của `vrun` được tự động xóa 24 giờ sau khi tác vụ kết thúc.
+
+## v0.2.12 — 2026-10-20
+
+- 🛑 Dừng một lượt của Claude trong chế độ hội thoại có hiệu lực ngay, và tin nhắn tiếp theo được gửi đi luôn, kể cả khi máy tính đang tải nặng.
+- 🪟 Phím tắt menu như Cmd+D và thao tác nhấn vào thông báo chỉ tác động đến cửa sổ tương ứng, nên cửa sổ từ xa không còn bị chia cùng cửa sổ chính.
+- 🔎 Tìm kiếm toàn cục trả về kết quả ngay cả khi việc lập chỉ mục chưa xong và cho biết còn bao nhiêu phiên đang được lập chỉ mục.
+- ⚡ Tìm kiếm toàn cục lập chỉ mục các cuộc hội thoại Claude, Codex, Pi và OMP trực tiếp từ tệp, nhanh hơn nhiều và không còn chiếm bộ nhớ đệm lịch sử hội thoại; mở một kết quả sẽ đưa bạn đến đúng tin nhắn đó.
+- 🧠 Lịch sử hội thoại được đọc trực tiếp từ bản ghi gốc của tác nhân thay vì một bản sao riêng trên đĩa, và các thư mục `chat-index`, `chat-spool` được xóa khi khởi động để giải phóng dung lượng đĩa.
+- 📱 Trên điện thoại, các phiên chạy ở chế độ terminal gợi ý chuyển sang chế độ hội thoại; sau khi bạn xác nhận, ứng dụng máy tính cũng chuyển phiên đó.
+- 👀 Kết nối chia sẻ liệt kê các phiên chạy ở chế độ terminal ở dạng chỉ đọc, và chỉ chủ sở hữu máy chủ mới có thể chuyển chúng sang chế độ hội thoại.
+- 🌐 Cài đặt dịch có thêm tùy chọn “Bật dịch theo mặc định”, quyết định trạng thái dịch ban đầu của các phiên chưa lưu lựa chọn.
+- 🌳 Cây phiên gom các phiên dùng cùng một worktree vào dưới một hàng worktree.
+- 📄 Các câu trả lời ngắn trong chế độ hội thoại, kể cả tin nhắn có hình ảnh, không còn hiện liên kết “Đọc toàn bộ nội dung”.
+- 🔕 Nút xóa tất cả huy hiệu thông báo được chuyển sang đầu bên trái thanh dưới cùng của cây phiên.
+- 🤖 Hộp thoại tạo phiên mới và tiếp tục phiên hiển thị biểu tượng của từng tác nhân trong danh sách loại tác nhân, và danh sách quyền mở lên trên khi phía dưới không đủ chỗ.
+- 🩹 Chế độ hội thoại không còn báo lịch sử có bản ghi bị lỗi khi bộ nhớ lưu trữ đang bận, và sẽ tiếp tục tải ngay sau đó.
+- 📝 Trong trình soạn thảo Markdown, Backspace và Shift+Tab bỏ đánh số của một mục danh sách trống hoặc của đoạn văn không đánh số nằm trong danh sách.
+- 🔵 Chip “Tác vụ” trong chế độ hội thoại chuyển sang màu lục lam, màu mà cây phiên dùng cho công việc chạy nền, khi vẫn còn tác vụ nền đang chạy; trong danh sách tác vụ, các tác vụ đang chạy cũng hiện màu lục lam kèm nhãn “Đang chạy”.
+- 🗑️ Khi xóa một phiên, ứng dụng không còn đề nghị xóa các git worktree; để xóa worktree, hãy dùng “Xóa worktree…”.
+- 🔁 Trạng thái dịch được cập nhật khi có thay đổi thay vì mỗi 10 giây, và cài đặt dịch kiểm tra lại các tác nhân đã cài đặt mỗi lần được mở.
+- 💤 Bảng Info tạm dừng lấy mẫu tài nguyên tiến trình khi cửa sổ đang ẩn.
+- ⏱️ Chỉ báo đang làm việc và bộ đếm thời gian của lượt trong chế độ hội thoại không còn biến mất hoặc còn sót lại khi một lượt bắt đầu hay kết thúc trong lúc bạn chuyển phiên.
+- 🔗 `vrefer` đánh số tin nhắn giống `vsearch`, và với các phiên Codex được rẽ nhánh, `vrefer` cùng tìm kiếm toàn cục đều bao gồm lịch sử của cuộc hội thoại gốc.
+
+## v0.2.11 — 2026-10-18
+
+- 🧪 Bản xem trước HTML thử nghiệm mở cạnh cuộc hội thoại hoặc trong thẻ, cập nhật khi tệp thay đổi và có thao tác với mã nguồn, bảng điều khiển và phiên bản; việc nghiệm thu trên ứng dụng gốc và các nền tảng vẫn chưa hoàn tất.
+- 📜 Hội thoại dài tải các tin nhắn cũ theo trang và mở rộng nội dung dài khi cần, còn hội thoại trực tiếp của Claude và Codex không còn hiển thị trùng tin nhắn hay công cụ.
+- 🔎 Tìm kiếm toàn cục cập nhật hội thoại đã thay đổi nhanh hơn, tiếp tục lập chỉ mục sau gián đoạn và bỏ qua hội thoại không đọc được khi tệp gốc chưa thay đổi.
+- 📊 Nhấn vào số tệp thay đổi trong bảng Info sẽ mở danh sách tệp đã sửa trong lượt này cùng số dòng thêm và xóa nếu có dữ liệu.
+- 🗂️ Hội thoại lưu trữ hiển thị thành các hàng gọn theo dự án, nhóm và phiên cha ban đầu, có thể thu gọn từng dự án hoặc mở rộng và thu gọn tất cả.
+- 🧩 Kỹ năng từ plugin của tài khoản Codex xuất hiện trong gợi ý hoàn thành và có thể dùng phím mũi tên để chọn trong menu.
+- ⌨️ Trên Windows và Linux, Ctrl+Shift+C sao chép văn bản đã chọn trong terminal và có thể đổi tại Cài đặt ▸ Phím tắt.
+- 🧹 Sau khi chạy `/clear` trong terminal Claude, mở lại phiên hoặc chuyển sang chế độ hội thoại sẽ không khôi phục cuộc hội thoại đã xóa.
+- 📏 Bảng Info hiển thị giới hạn ngữ cảnh của mô hình cho hội thoại OpenCode.
+- 🌐 Tính năng dịch bổ sung Bing Translator không cần khóa API, cài đặt ngôn ngữ gọn hơn và dịch trước khi gửi lại tin nhắn đã chỉnh sửa trong Claude và Codex.
+- 🔤 Bản dịch hiện có vẫn hiển thị sau khi đổi công cụ hoặc mô hình dịch và có thể được dịch lại.
+- ⏱️ `vrun` báo tiến độ mỗi 180 giây với mã thoát 75, cho phép chờ tiếp bằng `--wait` và ngăn dùng lại nhãn của tác vụ đang chạy.
+- 🧵 Phản hồi Claude được kích hoạt khi tác vụ nền hoàn tất có bản tóm tắt tác vụ và ranh giới hội thoại riêng, kể cả trong lịch sử.
+- ⚠️ Chuyển giữa chế độ terminal và hội thoại sẽ yêu cầu xác nhận khi có tác vụ nền đang chạy.
+- 🏠 Phiên chưa có thư mục làm việc hoặc có thư mục không còn tồn tại sẽ khởi động trong thư mục chính ở cả hai chế độ.
+- 🪟 Trên Windows, khởi động VelaTerm hoặc mở bảng kết nối không còn yêu cầu cài WSL khi chưa đăng ký bản phân phối nào.
+- 🔐 Các lần đăng nhập từ xa thất bại vẫn tính vào giới hạn thử lại dù kết nối đóng trong khi xác minh mật khẩu.
+- 🏷️ Huy hiệu phiên bản của tác nhân hiển thị rõ liên kết `Update: vX` khi có phiên bản CLI mới hơn.
+- 🔵 Chỉ báo tác vụ nền luôn sáng màu lục lam, còn chấm trạng thái được giữ ở thẻ và thanh bên thay vì tiêu đề ngăn.
+- ✍️ Viền ô nhập hội thoại rõ hơn và có đường bao ngoài khi được chọn, còn giá trị trong bảng Info của giao diện tối có độ sáng bằng nhãn.
+- 🌿 Nút sao chép dự án dùng biểu tượng nhánh kèm dấu dự án.
+
 ## v0.2.10 — 2026-10-13
 
 - 🧩 Hỗ trợ OpenCode v2 bên cạnh v1, và danh sách mô hình tải đúng với OpenCode v2.0.26.

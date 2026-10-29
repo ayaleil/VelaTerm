@@ -101,6 +101,7 @@ pub fn launch_args(
         "--output-format".into(),
         "stream-json".into(),
         "--include-partial-messages".into(),
+        "--replay-user-messages".into(),
         "--permission-prompt-tool".into(),
         "stdio".into(),
         "--thinking".into(),

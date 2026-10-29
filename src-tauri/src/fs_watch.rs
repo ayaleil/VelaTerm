@@ -57,6 +57,21 @@ pub(crate) fn classify(root: &Path, path: &Path) -> Option<Change> {
     Some(Change::Dir(dir.join("/")))
 }
 
+/// Only HEAD and references can change branch metadata; index refreshes must not re-probe it.
+fn branch_metadata(relative: &Path) -> bool {
+    let name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    if name.ends_with(".lock") { return false; }
+    matches!(relative.components().next().and_then(|c| c.as_os_str().to_str()), Some("HEAD" | "refs" | "packed-refs"))
+}
+
+fn branch_change(root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else { return false; };
+    let Ok(metadata) = relative.strip_prefix(".git") else { return false; };
+    // Directory notifications for `.git` itself can be caused by index.lock creation/removal.
+    // Only a linked worktree's `.git` file is meaningful at this level.
+    (metadata.as_os_str().is_empty() && path.is_file()) || branch_metadata(metadata)
+}
+
 /// Start or renew the watch on `root`, an existing directory.
 pub fn watch(app: &AppCtx, root: &str) -> Result<WatchInfo, String> {
     if !Path::new(root).is_dir() {
@@ -105,6 +120,7 @@ mod imp {
         dirs: BTreeSet<String>,
         overflow: bool,
         git: bool,
+        branch: bool,
     }
 
     fn registry() -> &'static Mutex<HashMap<String, Entry>> {
@@ -181,6 +197,10 @@ mod imp {
                 return;
             }
             let mut b = batch.lock().unwrap();
+            b.branch |= event.paths.iter().any(|p| {
+                branch_change(canonical, p) || branch_change(given, p)
+                    || git_dirs.iter().any(|d| p.strip_prefix(d).is_ok_and(branch_metadata))
+            });
             for change in changes {
                 match change {
                     Change::Git => b.git = true,
@@ -204,7 +224,7 @@ mod imp {
                 std::thread::sleep(DEBOUNCE);
                 let taken = std::mem::take(&mut *batch.lock().unwrap());
                 let dirs = (!taken.overflow).then(|| taken.dirs.into_iter().collect::<Vec<_>>());
-                app.emit(CHANGED_EVENT, serde_json::json!({ "root": root, "dirs": dirs, "git": taken.git }));
+                app.emit(CHANGED_EVENT, serde_json::json!({ "root": root, "dirs": dirs, "git": taken.git, "branch": taken.branch }));
             });
         })
         .map_err(|e| e.to_string())?;
@@ -245,6 +265,17 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn branch_notifications_exclude_index_and_submodule_churn() {
+        let root = Path::new("/r");
+        for path in ["/r/.git/HEAD", "/r/.git/refs/heads/main", "/r/.git/packed-refs"] {
+            assert!(branch_change(root, Path::new(path)), "{path}");
+        }
+        for path in ["/r/.git", "/r/.git/index", "/r/.git/index.lock", "/r/.git/HEAD.lock", "/r/.git/modules/jdk/index", "/r/sub/.git/HEAD", "/r/src/a.rs"] {
+            assert!(!branch_change(root, Path::new(path)), "{path}");
+        }
+    }
 
     #[test]
     fn changes_map_to_their_parent_listing_or_to_git() {

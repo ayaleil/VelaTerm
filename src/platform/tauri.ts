@@ -175,10 +175,13 @@ const windowCap: WindowCapability = {
     if (!env.hasNativeHost) return null;
     // Local backend events must use the local Tauri channel, not transport. A remote window's
     // transport sends listeners to the remote WebSocket and cannot reach its local backend.
+    // Listen for this window's label only: the backend addresses a click to the window that posted the
+    // notification, and a bare listen would let every other window open the session too.
     const { listen } = await import("@tauri-apps/api/event");
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
     return listen<string>("notification://click", (e) => {
       if (e.payload) cb(e.payload);
-    });
+    }, { target: getCurrentWindow().label });
   },
   async takeOpenProjectRequest() {
     if (!env.isTauri) return null;

@@ -1,6 +1,6 @@
 //! Views cache host responses and fail closed whenever their configuration cannot be read.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { listen } from "../ipc/transport";
+import { listen, onTransportReconnect } from "../ipc/transport";
 import { translationSettings, translationSession, saveTranslationPreferences, type TranslationSettings, type TranslationSession, type TranslationPreferences } from "../ipc/translation";
 import { recoverTranslationSubmissions } from "../layout/CenterPane/session/outbox";
 
@@ -10,7 +10,7 @@ const settingsListeners = new Set<() => void>();
 let settingsRequest: Promise<TranslationSettings | null> | null = null;
 let settingsRevision = 0;
 
-// One host subscription and poll serve every mounted conversation; this remains a read-only cache.
+// One host subscription serves every mounted conversation; this remains a read-only cache.
 export function refreshTranslationSettings(): Promise<TranslationSettings | null> {
   settingsRevision++;
   if (settingsRequest) return settingsRequest;
@@ -35,11 +35,12 @@ function subscribeSettings(listener: () => void) {
   settingsListeners.add(listener);
   if (settingsListeners.size === 1) {
     void refreshTranslationSettings();
+    // Every configuration change is announced, so nothing is polled: each read probes every agent's
+    // installation, including a login shell per missing agent. A reconnect covers events missed meanwhile;
+    // installations change outside the app and are read again when the settings section opens.
     const event = listen("translation://settings", () => void refreshTranslationSettings());
-    const focus = () => { void refreshTranslationSettings(); };
-    const timer = window.setInterval(focus, 10000);
-    window.addEventListener("focus", focus);
-    stopSettings = () => { clearInterval(timer); window.removeEventListener("focus", focus); void event.then(off => off()); };
+    const reconnect = onTransportReconnect(() => void refreshTranslationSettings());
+    stopSettings = () => { reconnect(); void event.then(off => off()); };
   }
   return () => { settingsListeners.delete(listener); if (!settingsListeners.size) { stopSettings?.(); stopSettings = null; } };
 }
@@ -86,8 +87,10 @@ export function useTranslationSession(sessionId: string): State {
     setValue(null); void refresh(); const sub = listen(`translation://session/${sessionId}`, () => void refresh());
     const global = listen("translation://settings", () => void refresh());
     const defaults = listen("translation://defaults", () => void refresh());
-    const timer = window.setInterval(() => void refresh(), 10000);
-    return () => { lifetime.current++; request.current++; void sub.then(off => off()); void global.then(off => off()); void defaults.then(off => off()); clearInterval(timer); };
+    // The host announces every change, so the state is read on mount and on events, never polled. Events
+    // sent while a remote connection was down are lost; one read after it returns covers them.
+    const reconnect = onTransportReconnect(() => void refresh());
+    return () => { lifetime.current++; request.current++; void sub.then(off => off()); void global.then(off => off()); void defaults.then(off => off()); reconnect(); };
   }, [refresh, sessionId]);
   const save = useCallback(async (preferences: TranslationPreferences) => { await saveTranslationPreferences(sessionId, preferences); await refresh(); }, [sessionId, refresh]);
   return { sessionId, originals: originals.current.session === sessionId ? originals.current.messages : [], settings, value: settings ? value : null, refresh, save };

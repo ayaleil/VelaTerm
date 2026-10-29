@@ -8,6 +8,11 @@ export function getGitStatus(path: string): Promise<GitStatus> {
   return invoke<GitStatus>("get_git_status", { path });
 }
 
+/** Metadata only: never scan working-tree files or recurse into submodules. */
+export function getGitBranchInfo(path: string): Promise<Pick<GitStatus, "isRepo" | "branch" | "isWorktree" | "worktreePath">> {
+  return invoke("get_git_branch_info", { path });
+}
+
 /** One direct child of a directory, lazily loaded one level at a time by the right-panel Files tree. */
 export interface DirEntry {
   name: string;

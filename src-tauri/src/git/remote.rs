@@ -39,7 +39,7 @@ impl PullMode {
 
 /// Run one git command headless with a timeout. Returns stdout, or the most telling stderr lines
 /// (credentials in URLs redacted) as the error.
-fn run_headless(cwd: &str, args: &[&str], timeout: Duration) -> Result<String, String> {
+pub(super) fn run_headless(cwd: &str, args: &[&str], timeout: Duration) -> Result<String, String> {
     let mut command = crate::host::command("git");
     command
         .arg("-C")

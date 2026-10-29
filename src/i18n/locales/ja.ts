@@ -5,8 +5,15 @@ import type en from "./en";
 const ja: typeof en = {
   "panel.averageOutput": "平均出力速度",
   "panel.averageOutputHint": "計測した応答時間から推定した、1秒あたりの出力トークン数です。報告された推論トークンを含み、ツールの実行時間とユーザーを待つ時間は除外します。使用量と計測時間を正しく対応付けられない場合は表示しません。モデル自体のデコード速度ではありません。",
+  "panel.turnStats": "ターンの統計",
+  "panel.fileCount": (n: number) => `${n} 個のファイル`,
+  "panel.showChangedFiles": "このターンで変更したファイルを表示",
+  "panel.noFilesChanged": "このターンで編集したファイルはありません。",
+  "panel.shellEditsNotListed": "シェルコマンドによる変更は一覧に含まれません。",
   "translation.swap": "言語を入れ替え",
   "translation.openai": "OpenAI 互換",
+  "translation.bing": "Bing 翻訳（API キー不要）",
+  "translation.bingHint": "Bing の無料翻訳を利用します。API キーや Microsoft アカウントは不要です。",
   "translation.google": "Google 翻訳（API キー不要）",
   "translation.googleHint": "Google の無料翻訳を利用します。API キーや Google アカウントは不要です。",
   "translation.rateLimited": "翻訳リクエストが多すぎます。しばらくしてからもう一度お試しください。",
@@ -15,6 +22,8 @@ const ja: typeof en = {
   "translation.title": "翻訳",
   "translation.enable": "翻訳を有効にする",
   "translation.visibility": "この機能を有効にすると、会話に翻訳用の操作が表示されます。",
+  "translation.defaultEnabled": "翻訳を初期設定で有効にする",
+  "translation.defaultEnabledHint": "翻訳設定を個別に保存していない会話に適用されます。変更は自動的に保存されます。",
   "translation.conversationKinds": "翻訳を使用するエージェントの種類",
   "translation.conversationKindsHint": "選択した種類のエージェントとの会話でのみ、翻訳の操作と自動翻訳が有効になります。変更は自動的に保存されます。",
   "translation.chooseConversationKinds": "エージェントの種類を選択",
@@ -293,6 +302,8 @@ const ja: typeof en = {
   "memory.collections": "アーカイブ済みセッション",
   "memory.collectionConversation": "会話",
   "memory.collectionEmptyEntries": "この会話にはまだナレッジ記事がありません。",
+  "memory.collapseAllProjects": "すべてのプロジェクトを折りたたむ",
+  "memory.expandAllProjects": "すべてのプロジェクトを展開する",
   "memory.title": "ナレッジベース",
   "memory.add": "ナレッジベースに追加",
   "memory.intro": "プロジェクトとセッションごとに知識を整理します。保存された記事は元の情報の変更に連動せず、手動で編集できます。",
@@ -883,6 +894,7 @@ const ja: typeof en = {
   "settings.scSplitDown": "下に分割", // Split down
   "settings.scSearch": "ターミナル内を検索", // Find in terminal
   "settings.scGlobalSearch": "全セッションを検索", // Search all sessions
+  "settings.scCopyTerminal": "ターミナルの選択内容をコピー", // Copy terminal selection
   "settings.scSelectAllTerminal": "ターミナル内をすべて選択", // Select all in terminal
   "settings.scSaveDoc": "ドキュメントを保存", // Save document
   "settings.scRecording": "キーを押してください…", // Press keys…
@@ -987,6 +999,7 @@ const ja: typeof en = {
   "connect.portPlaceholder": "ポート", // Port
   "connect.connecting": "接続中…", // Connecting…
   "connect.connect": "接続", // Connect
+  "connect.stop": "中止",
   "connect.stagePreparing": "サーバーを準備中…",
   "connect.stageTransferring": "サーバーを転送中…",
   "connect.stageStarting": "サーバーを起動中…",
@@ -1250,8 +1263,6 @@ const ja: typeof en = {
     `グループ「${name}」を削除しますか？配下のサブグループとセッションもすべて削除されます。この操作は取り消せません。`, // Delete group "{name}"?…
   "tree.deleteSessionBody": (name) =>
     `セッション「${name}」（およびすべての子セッション）を削除しますか？この操作は取り消せません。`, // Delete session "{name}"…
-  "tree.deleteWorktrees": (n) =>
-    `関連する git worktree も削除する（計 ${n} 件。作業ツリーに変更があると削除に失敗することがあります）`, // Also remove associated git worktrees…
 
   // Session information dialog
   "info.name": "名前", // Name
@@ -1300,9 +1311,9 @@ const ja: typeof en = {
     "このプロジェクトには利用可能な git リポジトリのパスがありません。", // This project has no usable git repository path.
   // ── Worktree selector for custom session creation ──
   "worktreeSel.label": "Worktree",
-  "worktreeSel.modeNone": "なし", // None
-  "worktreeSel.modeNew": "新規", // New
-  "worktreeSel.modeExisting": "既存", // Existing
+  "worktreeSel.modeNone": "使用しない", // None
+  "worktreeSel.modeNew": "新規作成", // New
+  "worktreeSel.modeExisting": "既存を選択", // Existing
   "worktreeSel.loading": "worktree を読み込み中…", // Loading worktrees…
   "worktreeSel.empty": "このリポジトリには既存の worktree がありません。", // No existing worktrees in this repository.
   "worktreeSel.loadFailed":
@@ -1343,6 +1354,7 @@ const ja: typeof en = {
   "search.includeArchivedHint":
     "アーカイブ済みセッションも検索対象に含める（既定ではオフ）", // Also search archived sessions (off by default)
   "search.searching": "検索中…", // Searching…
+  "search.progress": (sessions, bytes) => `検索中… ${sessions} 件のセッションを確認済み · ${bytes} を読み込み済み`,
   "search.noResults": "一致する項目が見つかりません", // No matches found
   "search.sessionCount": (n) => `${n} 件のセッション`, // n sessions
   "search.matchCount": (n) => `${n} 件の一致`, // n matches
@@ -1351,6 +1363,7 @@ const ja: typeof en = {
   "search.backToResults": "結果に戻る", // Back to results
   "search.archivedBadge": "アーカイブ済み", // Archived
   "search.summary": (m, s) => `${m} 件の一致 · ${s} 件のセッション`, // X matches · N sessions
+  "search.pending": (n) => `${n} 件のセッションがまだインデックス作成中のため、結果が一部欠けている可能性があります。`, // N sessions are still being indexed, so results may be incomplete
   "search.matchPosition": (n, total) => `${n} / ${total}`, // N of M
   "search.roleTerminal": "ターミナル", // Terminal
   "search.collapseGroup": "折りたたむ", // Collapse
@@ -1754,7 +1767,6 @@ const ja: typeof en = {
   "mobile.inputOptions": "入力オプション",
   "mobile.connections": "接続管理",
   "mobile.more": "その他の操作",
-  "mobile.toDesktop": "デスクトップ版に切り替え", // Switch to desktop
   "mobile.empty1": "セッションがありません。", // No sessions.
   "mobile.noMatch": "一致するセッションがありません", // No matching sessions
   "mobile.empty2":
@@ -1762,6 +1774,10 @@ const ja: typeof en = {
   "mobile.back": "‹ 戻る", // ‹ Back
   "mobile.selCopy": "コピー", // Copy
   "mobile.selCancel": "キャンセル", // Cancel
+  "mobile.compose": "メッセージを作成",
+  "mobile.composePlaceholder": "ターミナルに送信するメッセージを入力",
+  "mobile.showTranscript": "履歴",
+  "mobile.showTerminal": "ターミナル",
 
   // ── Mobile connection client (apps/mobile start page) ──
   "mobile.phaseConnecting": "SSH で接続中…",
@@ -1960,6 +1976,7 @@ const ja: typeof en = {
   "skills.vspawn": "子セッションを作成してタスクを任せます。",
   "skills.vspawnTree": "専用のワークツリーを持つ子セッションを作成します。",
   "skills.vopen": "ファイルや Web ページを VelaTerm で開きます。",
+  "skills.vartifact": "視覚的な成果を、セッションの横にライブの HTML ページとして表示します。", // Show visual work as a live HTML page beside the conversation.
   "skills.vrefer": "ほかのセッションの会話を読み取ります。",
   "skills.vask": "ほかのセッションについて質問し、簡潔な回答を得ます。",
   "skills.vsearch": "すべてのセッションの会話を検索します。",
@@ -1978,6 +1995,7 @@ const ja: typeof en = {
   "session.showTerminal": "ターミナルビュー",
   "session.switchTitle": "ビューを切り替えるとエージェントが再起動します",
   "session.switchBody": "進行中のターンは中断されます。会話の内容は残ります。",
+  "session.switchBodyBackground": "エージェントが開始したバックグラウンドタスクは停止する場合があり、終了してもエージェントには通知されません。会話の内容は残ります。",
   "session.switchConfirm": "切り替える",
   "session.terminalViewHint": "ここをクリックすると、ターミナルビューに戻れます。",
   "session.loading": "会話を読み込んでいます…",
@@ -2123,6 +2141,7 @@ const ja: typeof en = {
   "chat.compaction.manual": "コンテキストを圧縮しました",
   "chat.compaction.auto": "コンテキストを自動で圧縮しました",
   "chat.compaction.from": (tokens: string) => `圧縮前 ${tokens} トークン`,
+  "chat.wake.label": "バックグラウンドタスク終了",
   // N steps
   "chat.subagent.steps": (n: number) => `${n} ステップ`,
   "chat.subagent.tokens": (tokens: string) => `${tokens}トークン`,
@@ -2433,6 +2452,76 @@ const ja: typeof en = {
   "ports.limit": (max) => `1 つの接続で転送できるポートは最大 ${max} 個です`, // At most {max} ports can be forwarded per connection
   "ports.notForwarded": (port) => `ポート ${port} は転送されていません`, // Port {port} is not forwarded
   "statusbar.ports": (n) => `${n} 個のポートを転送中`, // {n} forwarded ports
+  "chat.history.imageDownloadRequired": "この画像はここでは開けません。元の画像をダウンロードしてご確認ください。",
+  "chat.history.readBody": "全文を読む",
+  "chat.history.selectDetail": "ファイルまたは項目を選択",
+  "chat.history.part": "パート",
+  "chat.history.copyPart": "このパートをコピー",
+
+  "chat.history.searchMore": "他の検索結果",
+  "chat.history.indexing": "会話を読み込んでいます…",
+  "chat.history.newer": "新しいメッセージを読み込む",
+
+  "chat.history.copyComplete": "内容をすべてコピー",
+  "chat.history.downloadComplete": "内容をすべてダウンロード",
+  "chat.history.unavailable": "このセッションの履歴の詳細は利用できません。",
+  "chat.history.openViewer": "詳細ビューを開いて内容をすべて表示してください。",
+  "chat.history.copyBusy": "内容全体をコピーしています。",
+  "chat.history.clipboardLimit": "この内容はクリップボードの容量制限を超えています。ファイル全体をダウンロードしてください。",
+  "chat.history.contentChanged": "転送中に内容が変更されました。再度読み込んでください。",
+  "export.preparing": "セッションのエクスポートを準備しています…",
+  "chat.history.windowLimit": "このメッセージは表示上限を超えています。全文を読み込むか、ダウンロードしてください。",
+
+  "chat.history.incomplete": "会話の読み込みが完了していません。しばらくしてから再試行してください。",
+  "chat.history.indexBusy": "別のプロセスが履歴の索引を使用しています。しばらくしてから再試行してください。",
+  "chat.history.unsupported": "一部の履歴の形式には対応していません。元の内容は保存されています。",
+  "chat.history.canceled": "履歴の読み込みをキャンセルしました。",
+  "chat.history.pagedRequired": "この内容は履歴のページ表示または詳細ビューアーで読み込んでください。",
+  "chat.history.sourceMissing": "履歴の参照元が見つからないか、アクセスできません。",
+  "chat.history.updateServer": "会話履歴を安全に読み込むには、サーバーを更新してください。",
+  "chat.history.storagePressure": "履歴の保存先に空き容量がないか、保存先を利用できません。空き容量を確保して再試行してください。エージェントの操作は引き続き利用できます。",
+
+  "artifact.preview": "プレビュー", // Preview
+  "artifact.source": "ソース", // Source
+  "artifact.split": "分割", // Split
+  "artifact.live": "ライブ", // Live
+  "artifact.liveTitle": "ファイルが変更されると自動で再読み込みします", // Reloads automatically when the file changes
+  "artifact.offline": "オフライン", // Offline
+  "artifact.offlineTitle": "このページはインターネットから何も読み込めません。クリックすると、このファイルに限り許可します。", // This page cannot load anything from the internet. Click to allow it for this file.
+  "artifact.online": "オンライン", // Online
+  "artifact.onlineTitle": "このページはインターネットからファイルを読み込めます。クリックすると再びブロックします。", // This page can load files from the internet. Click to block them again.
+  "artifact.netBlocked": (n: number) => `このページがインターネットから ${n} 件のファイルを読み込もうとしたため、ブロックしました。`, // This page tried to load ${n} files from the internet. They were blocked.
+  "artifact.allowForFile": "このファイルを許可", // Allow for this file
+  "artifact.errorCount": (n: number) => `エラー ${n} 件`, // ${n} errors
+  "artifact.warningCount": (n: number) => `警告 ${n} 件`, // ${n} warnings
+  "artifact.console": "コンソール", // Console
+  "artifact.consoleEmpty": "エラーや警告はありません。", // No errors or warnings.
+  "artifact.clearConsole": "クリア", // Clear
+  "artifact.closeConsole": "コンソールを閉じる", // Close console
+  "artifact.sendToSession": "セッションに送る", // Send to session
+  "artifact.sendToSessionTitle": "このページを書いたセッションの入力欄にエラーを入れます", // Put these errors in the message box of the session that wrote this page
+  "artifact.fileGone": "このファイルは利用できなくなりました", // This file is no longer available
+  "artifact.fileGoneBody": (name: string) => `${name} は移動または削除されました。新しい場所から開き直すか、このタブを閉じてください。`, // ${name} was moved or deleted. Open it again from its new location, or close this tab.
+  "artifact.reload": "再読み込み", // Reload
+  "artifact.openInBrowser": "ブラウザで開く", // Open in browser
+  "artifact.viewportFit": "タブに合わせる", // Fit to tab
+  "artifact.viewportDesktop": "デスクトップ", // Desktop
+  "artifact.viewportTablet": "タブレット", // Tablet
+  "artifact.viewportPhone": "スマートフォン", // Phone
+  "artifact.goToSession": "セッションへ移動", // Go to session
+  "artifact.versionTitle": (n: number, time: string) => `バージョン ${n} · ${time}`, // Version ${n} · ${time}
+  "artifact.viewingVersion": (n: number, time: string) => `バージョン ${n}（${time} に保存）を表示しています`, // Viewing version ${n}, saved ${time}
+  "artifact.restoreVersion": "このバージョンに戻す", // Restore this version
+  "artifact.backToLatest": "最新版に戻る", // Back to latest
+  "artifact.restoreBody": (n: number) => `ファイルをバージョン ${n} の内容で置き換えます。現在の内容はバージョン履歴に残ります。`, // The file will be replaced with version ${n}. Its current content stays in the version history.
+  "artifact.restore": "戻す", // Restore
+  "artifact.restoreFailed": "このバージョンに戻せませんでした。もう一度お試しください。", // The version could not be restored. Please try again.
+  "artifact.openAsTab": "タブで開く", // Open as tab
+  "artifact.closePanel": "プレビューを閉じる", // Close preview
+  "artifact.cardOpen": "開く", // Open
+  "artifact.cardOpenTitle": "このセッションの横に開く", // Open beside this session
+  "artifact.cardKind": "HTML ページ", // HTML page
+  "artifact.frameTitle": (name: string) => `${name} のプレビュー`, // Preview of ${name}
 };
 
 export default ja;

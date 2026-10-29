@@ -63,7 +63,7 @@ const STATUS_FILTERS: {
   { st: "working", color: "var(--status-working)", pulse: true, labelKey: "tree.filterWorking" },
   { st: "asking", color: "var(--status-asking)", pulse: true, labelKey: "tree.filterAsking" },
   { st: "waiting", color: "var(--status-waiting)", pulse: false, labelKey: "tree.filterWaiting" },
-  { st: "background", color: "var(--status-background)", pulse: true, labelKey: "tree.filterBackground" },
+  { st: "background", color: "var(--status-background)", pulse: false, labelKey: "tree.filterBackground" },
 ];
 
 /** Isolated filter button/dropdown subscribing to high-frequency runtime/notification changes. Agent updates
@@ -233,6 +233,12 @@ function SidebarTreePane({
   const t = useT();
   const setTreeFilter = useTermStore((s) => s.setSidebarTreeViewFilter);
   const refreshStatusMatches = useTermStore((s) => s.refreshSidebarTreeViewStatusMatches);
+  // Mirror what the Dock badge counts, not just the session dots: when an unanswered spawn card is the
+  // only thing left, the badge shows a number while the button that clears it stays hidden.
+  const hasBadges = useTermStore(
+    (s) => Object.keys(s.notifications).length + s.pendingSpawns.length > 0,
+  );
+  const clearAllBadges = useTermStore((s) => s.clearAllBadges);
   const treeWrapRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -288,6 +294,19 @@ function SidebarTreePane({
         <TreeScrollbar wrapRef={treeWrapRef} />
       </div>
       <div className="sidebar-tree-footer">
+        {hasBadges && (
+          <button
+            className="icon-btn sm sidebar-tree-clear-badges"
+            title={t("tree.clearAllNotifications")}
+            aria-label={t("tree.clearAllNotifications")}
+            onClick={(event) => {
+              event.stopPropagation();
+              clearAllBadges();
+            }}
+          >
+            <Icons.bellOff size={13} />
+          </button>
+        )}
         <button
           className="icon-btn sm sidebar-tree-refresh"
           title={t("tree.refreshStatusFilter")}
@@ -432,12 +451,6 @@ export function LeftSidebar() {
   const clearNodeWorktree = useTermStore((s) => s.clearNodeWorktree);
   const globalSearchOpen = useTermStore((s) => s.globalSearchOpen);
   const setGlobalSearchOpen = useTermStore((s) => s.setGlobalSearchOpen);
-  // Mirror what the Dock badge counts, not just the session dots: when an unanswered spawn card is the
-  // only thing left, the badge shows a number while the button that clears it stays hidden.
-  const hasBadges = useTermStore(
-    (s) => Object.keys(s.notifications).length + s.pendingSpawns.length > 0,
-  );
-  const clearAllBadges = useTermStore((s) => s.clearAllBadges);
 
   // Keep shallow component mocks and pre-migration in-memory states renderable while the store initializes.
   const views: SidebarTreeView[] = sidebarTreeViews?.length
@@ -781,7 +794,7 @@ export function LeftSidebar() {
         {
           label: virtual ? t("tree.deleteCollection") : t("tree.removeProject"),
           danger: true,
-          onClick: () => openDialog({ type: "confirmDelete", node, worktreePaths: [] }),
+          onClick: () => openDialog({ type: "confirmDelete", node }),
         },
       ];
     }
@@ -845,7 +858,7 @@ export function LeftSidebar() {
         {
           label: t("tree.deleteGroup"),
           danger: true,
-          onClick: () => openDialog({ type: "confirmDelete", node, worktreePaths: [] }),
+          onClick: () => openDialog({ type: "confirmDelete", node }),
         },
       ];
       // Layout: Session, Git, then Group actions. Place Delete Group last to reduce accidental clicks.
@@ -945,7 +958,7 @@ export function LeftSidebar() {
           <Icons.projectOpen size={14} />
         </button>
         <button className="icon-btn sm" title={t("tree.cloneProject")} onClick={() => setCloneModalOpen(true)}>
-          <Icons.git size={14} />
+          <Icons.projectClone size={14} />
         </button>
         <button
           className="icon-btn sm"
@@ -957,15 +970,6 @@ export function LeftSidebar() {
         <button className="icon-btn sm" title={t("tree.archivedSessions")} onClick={() => memoryNavigate(memoryUrl("collections", { memoryProject: null, memorySession: null, memoryCollectionProject: null, memoryCollectionQuery: null, memoryCollectionTab: null }))}>
           <Icons.archive size={14} />
         </button>
-        {hasBadges && (
-          <button
-            className="icon-btn sm"
-            title={t("tree.clearAllNotifications")}
-            onClick={clearAllBadges}
-          >
-            <Icons.bellOff size={13} />
-          </button>
-        )}
       </div>
 
       <div ref={treeStageRef} className="sidebar-tree-stage">

@@ -1,11 +1,77 @@
 # Changelog
 
-> Created: 2026-07-09 16:10 · Updated: 2026-10-14 14:27
+> Created: 2026-07-09 16:10 · Updated: 2026-10-23
 
 All notable changes to VelaTerm are documented here, newest first.
 v0.1.91 is the first public release; earlier version numbers were internal iterations and are not covered.
 
 ---
+
+## v0.2.14 — 2026-10-23
+
+- 🔌 Remote connections no longer drop and reconnect every second while several long conversations are open, so those conversations open normally again.
+- ⏹️ SSH and WSL connections show a Stop button while connecting, so you can stop at any stage, including while the server is being prepared; Cancel in the password dialog also stops a connection in progress.
+- 🌿 The session tree and branch labels no longer pile up Git processes in large repositories, and background Git reads stop after 30 seconds instead of hanging.
+- 🧩 The Git panel refreshes much faster in repositories with submodules: edits inside a submodule no longer list it in the parent repository, while a submodule that points to a new commit is still listed.
+- 📁 Groups can be dragged into other projects, taking their nested groups and sessions along, and those sessions then start in the new project's folder.
+- ⏳ Opening a long conversation shows a small Loading conversation… indicator instead of History is still being indexed.
+- 🖱️ The session context menu shows Kill Process whenever the session's process is running, including processes started from another client, and hides it once the process has exited.
+
+## v0.2.13 — 2026-10-22
+
+- 📱 On phones, agents running in terminal view open straight to the terminal, with a floating input box for writing or dictating whole messages; small Transcript and Terminal buttons in the header switch between the two, and the transcript no longer suggests switching to conversation view.
+- 🔑 On shared connections, the host's owner can open and type in the terminals of agents running in terminal view, and the session list also shows agents without a conversation view, such as Kiro; invited accounts still see a read-only transcript.
+- 🌐 Manually translating a reply in an idle session shows the translation instead of Translation is unavailable.
+- 📜 While you scroll up in a long conversation, new replies are no longer held back behind Load newer messages, and scrolling down from earlier history loads newer messages automatically.
+- 🧭 The phone view no longer offers Switch to desktop, and phones that switched earlier return to the phone view automatically.
+- 🧹 `vrun` run records are deleted automatically 24 hours after the task ends.
+
+## v0.2.12 — 2026-10-20
+
+- 🛑 Stopping a Claude turn in conversation view takes effect immediately, and your next message is sent right away, even when the computer is under heavy load.
+- 🪟 Menu shortcuts such as Cmd+D and notification clicks act only in the window they belong to, so remote windows no longer split along with the main window.
+- 🔎 Global search returns results while indexing is still in progress and shows how many sessions are still being indexed.
+- ⚡ Global search indexes Claude, Codex, Pi and OMP conversations directly from their files, which is much faster and no longer fills the conversation history cache, and opening a result jumps to the exact message.
+- 🧠 Conversation history is read straight from the agents' original records instead of a separate on-disk copy, so the `chat-index` and `chat-spool` folders are removed at startup to free disk space.
+- 📱 On phones, sessions running in terminal view suggest switching to conversation view; after you confirm, the desktop app switches the session too.
+- 👀 Shared connections list sessions running in terminal view as read-only, and only the host's owner can switch them to conversation view.
+- 🌐 Translation settings add Enable translation by default, which sets the initial translation state for sessions without a saved choice.
+- 🌳 The session tree groups sessions that use the same worktree under a single worktree row.
+- 📄 Short replies in conversation view, including messages with images, no longer show a Read complete content link.
+- 🔕 The button that clears all notification badges moves to the left end of the session tree's bottom bar.
+- 🤖 The new session and resume session dialogs show agent icons in the agent type list, and the permission list opens upward when there isn't enough space below.
+- 🩹 Conversation view no longer reports history as containing malformed records while storage is busy, and continues loading shortly afterward.
+- 📝 In the Markdown editor, Backspace and Shift-Tab remove the numbering from an empty list item or from an unnumbered paragraph inside a list.
+- 🔵 The Tasks chip in conversation view turns cyan, the color the session tree uses for background work, while background tasks are still running, and running tasks in the Tasks list are shown in cyan with a Running label.
+- 🗑️ Deleting a session no longer offers to remove git worktrees; use Delete worktree… to remove one.
+- 🔁 Translation status updates when it changes instead of every 10 seconds, and translation settings check installed agents again each time they open.
+- 💤 The Info panel pauses process resource sampling while the window is hidden.
+- ⏱️ The working indicator and turn timer in conversation view no longer go missing or linger when a turn starts or ends while you switch sessions.
+- 🔗 `vrefer` numbers messages the same way as `vsearch`, and `vrefer` and global search include the parent conversation's history for forked Codex sessions.
+
+## v0.2.11 — 2026-10-18
+
+- 🧪 Experimental HTML previews open beside conversations or in tabs, refresh as files change, and offer source, console and version controls; native and cross-platform acceptance testing is pending.
+- 📜 Large conversations load older messages in pages and expand long content on demand, while Claude and Codex live conversations avoid duplicate messages and tools.
+- 🔎 Global search refreshes changed conversations faster, resumes indexing after interruptions, and skips unreadable conversations while their files remain unchanged.
+- 📊 The Info panel's files changed count opens a list of this turn's edited files with available added and removed line counts.
+- 🗂️ Archived conversations follow their original projects, groups and parent sessions in compact rows, with collapsible projects and Expand all / Collapse all controls.
+- 🧩 Codex account plugin skills appear in completion suggestions, and completion menus support arrow-key selection.
+- ⌨️ Windows and Linux: Ctrl+Shift+C copies selected terminal text, with a configurable shortcut in Settings ▸ Shortcuts.
+- 🧹 Claude terminal sessions no longer reopen the cleared conversation after `/clear` or when switching to conversation view.
+- 📏 The Info panel shows the model's context limit for OpenCode conversations.
+- 🌐 Translation adds key-free Bing Translator, compact language settings, and translation before resending edited Claude and Codex messages.
+- 🔤 Existing translations remain visible after changing the translation engine or model and can be translated again.
+- ⏱️ `vrun` reports progress every 180 seconds with exit code 75, supports continued waiting with `--wait`, and protects running tasks from reuse of the same label.
+- 🧵 Claude replies triggered by completed background tasks have their own task summary and conversation boundary, including in history.
+- ⚠️ Switching between terminal and conversation views asks for confirmation while background tasks are running.
+- 🏠 Sessions with no working directory or a missing directory start in your home directory in both views.
+- 🪟 Windows: opening VelaTerm or the connection panel no longer prompts to install WSL when no distributions are registered.
+- 🔐 Failed remote logins count toward the retry limit even when the connection closes during password verification.
+- 🏷️ Agent version badges show an explicit `Update: vX` link when a newer CLI version is available.
+- 🔵 Background task indicators stay steadily cyan, and pane headers leave status dots to tabs and the sidebar.
+- ✍️ Conversation input borders are clearer, with an outer focus outline, and dark-theme Info panel values match their labels' brightness.
+- 🌿 Clone project buttons use a branch icon with a project marker.
 
 ## v0.2.10 — 2026-10-13
 

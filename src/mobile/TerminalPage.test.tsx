@@ -29,7 +29,7 @@ describe("mobile error navigation",()=>{
     const back=vi.fn();render(<TerminalPage session={{...session,kind:"kiro"}} onBack={back}/>);
     expect(screen.getByTestId("terminal")).toBeTruthy();
     expect(screen.getByTestId("keys")).toBeTruthy();
-    expect(screen.getByRole("link",{name:"session.showConversation"}).getAttribute("href")).toContain("sessionView=history");
+    expect(screen.getByRole("link",{name:"mobile.showTranscript"}).getAttribute("href")).toContain("sessionView=history");
     fixture.exit.mock.calls[0][1]();expect(back).toHaveBeenCalledOnce();
   });
   it("keeps explicit Kiro history free of terminal controls and exit subscriptions",async()=>{
@@ -41,12 +41,20 @@ describe("mobile error navigation",()=>{
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(fixture.exit).not.toHaveBeenCalled();expect(fixture.killed).not.toHaveBeenCalled();
     expect(fixture.write).not.toHaveBeenCalled();
-    expect(screen.getByRole("link",{name:"session.showTerminal"}).getAttribute("href")).not.toContain("sessionView");
+    expect(screen.getByRole("link",{name:"mobile.showTerminal"}).getAttribute("href")).not.toContain("sessionView");
+  });
+  it("shows a terminal-view Claude session as its terminal, with the transcript one link away",()=>{
+    const back=vi.fn();render(<TerminalPage session={session} onBack={back}/>);
+    expect(screen.getByTestId("terminal")).toBeTruthy();
+    expect(screen.getByTestId("keys")).toBeTruthy();
+    expect(fixture.read).not.toHaveBeenCalled();
+    expect(screen.getByRole("link",{name:"mobile.showTranscript"}).getAttribute("href")).toContain("sessionView=history");
+    fixture.exit.mock.calls[0][1]();expect(back).toHaveBeenCalledOnce();
   });
   it("keeps back and connection management outside a failed conversation",async()=>{
     fixture.read.mockRejectedValue(new Error("Claude transcript file not found"));
     Object.assign(window,{__VELATERM_CONNECTION_MENU__:true});const back=vi.fn();
-    render(<TerminalPage session={session} onBack={back}/>);
+    render(<TerminalPage session={session} view="history" onBack={back}/>);
     await screen.findByRole("alert");
     const header=screen.getByRole("banner");
     expect(header.contains(screen.getByRole("button",{name:"mobile.back"}))).toBe(true);
@@ -59,7 +67,7 @@ describe("mobile error navigation",()=>{
   it("retries recording load and keeps back available while loading",async()=>{
     fixture.read.mockRejectedValueOnce(new Error("missing"));let resolve!:(value:unknown)=>void;
     fixture.read.mockImplementationOnce(()=>new Promise(r=>{resolve=r}));
-    const back=vi.fn();render(<TerminalPage session={session} onBack={back}/>);
+    const back=vi.fn();render(<TerminalPage session={session} view="history" onBack={back}/>);
     await screen.findByRole("alert");fireEvent.click(screen.getByRole("button",{name:"common.retry"}));
     expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.getByRole("button",{name:"mobile.back"})).toBeTruthy();

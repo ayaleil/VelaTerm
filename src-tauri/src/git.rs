@@ -177,18 +177,80 @@ impl GitStatus {
     }
 }
 
-/// Run Git in a directory and preserve stdout bytes for NUL-delimited path records.
-fn run_git_bytes(path: &str, args: &[&str]) -> Option<Vec<u8>> {
-    let output = crate::host::command("git")
+/// Upper bound for one background Git read. A slower scan is killed with its helpers and reported
+/// as a failure, instead of holding a thread and a process while the next refresh starts another.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Status shown by the panels describes the superproject: a submodule counts as changed when its
+/// checked-out commit moves, not when files inside it do. Looking inside costs one full status per
+/// submodule on every refresh (seconds per refresh in a workspace of JDK checkouts). This is only
+/// the default, so a submodule's own `ignore` setting still decides for that submodule.
+const SHALLOW_SUBMODULES: [&str; 2] = ["-c", "diff.ignoreSubmodules=dirty"];
+
+/// Run a read-only Git command, handing its stdout to `read` on a helper thread, within
+/// `timeout` ([`READ_TIMEOUT`] outside tests). `read` returns its result and whether it stopped
+/// early, in which case Git is killed rather than awaited. None when Git cannot start, fails, or
+/// times out.
+fn read_git<T: Send + 'static>(
+    path: &str,
+    args: &[&str],
+    timeout: Duration,
+    read: impl FnOnce(std::process::ChildStdout) -> (T, bool) + Send + 'static,
+) -> Option<T> {
+    let mut command = crate::host::command("git");
+    command
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .arg("-C")
         .arg(path)
         .args(args)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    // Own process group, so a timeout also stops the helpers Git started.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
     }
-    Some(output.stdout)
+    let mut child = command.spawn().ok()?;
+    let stdout = child.stdout.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(read(stdout));
+    });
+    let deadline = Instant::now() + timeout;
+    let stop = |child: &mut std::process::Child| {
+        terminate_clone_process(child);
+        let _ = child.wait();
+    };
+    let Ok((value, stopped)) = rx.recv_timeout(timeout) else {
+        stop(&mut child);
+        return None;
+    };
+    if stopped {
+        stop(&mut child);
+        return Some(value);
+    }
+    // Stdout is closed, so Git is exiting; still bound the wait.
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success().then_some(value),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                stop(&mut child);
+                return None;
+            }
+        }
+    }
+}
+
+/// Run Git in a directory and preserve stdout bytes for NUL-delimited path records.
+fn run_git_bytes(path: &str, args: &[&str]) -> Option<Vec<u8>> {
+    read_git(path, args, READ_TIMEOUT, |mut stdout| {
+        let mut buf = Vec::new();
+        let _ = stdout.read_to_end(&mut buf);
+        (buf, false)
+    })
 }
 
 /// Run Git in a directory and return stdout with only the trailing newline removed.
@@ -205,6 +267,32 @@ fn run_git_raw(path: &str, args: &[&str]) -> Option<String> {
 /// Run Git in a directory and return trimmed stdout on success.
 fn run_git(path: &str, args: &[&str]) -> Option<String> {
     run_git_raw(path, args).map(|s| s.trim().to_string())
+}
+
+/// Resolve branch/worktree metadata without reading the index or scanning any files.
+pub fn branch_info(path: &str) -> GitStatus {
+    let read = |args: &[&str]| remote::run_headless(path, args, Duration::from_secs(5));
+    let Ok(locations) = read(&[
+        "rev-parse", "--is-inside-work-tree", "--absolute-git-dir", "--git-common-dir", "--show-toplevel",
+    ]) else { return GitStatus::not_repo(); };
+    let mut lines = locations.lines();
+    if lines.next().map(str::trim) != Some("true") { return GitStatus::not_repo(); }
+    let git_dir = lines.next().map(str::trim);
+    let common_dir = lines.next().map(str::trim);
+    let root = lines.next().map(str::trim).map(str::to_string);
+    let resolve = |p: &str| std::fs::canonicalize(std::path::Path::new(path).join(p)).ok();
+    let is_worktree = match (git_dir.and_then(resolve), common_dir.and_then(resolve)) {
+        (Some(gd), Some(cd)) => gd != cd,
+        _ => false,
+    };
+    GitStatus {
+        is_repo: true,
+        branch: read(&["symbolic-ref", "--quiet", "--short", "HEAD"]).ok(),
+        is_worktree,
+        worktree_path: if is_worktree { root.clone() } else { None },
+        root,
+        ..GitStatus::default()
+    }
 }
 
 /// Inspect Git state; return is_repo=false for non-repositories or unavailable Git.
@@ -230,7 +318,8 @@ pub fn status(path: &str) -> GitStatus {
 
     // One porcelain v2 call reports the branch (including an unborn one), HEAD, the upstream and
     // ahead/behind next to the entries, which used to take four separate git processes.
-    let porcelain = run_git_raw(path, &["status", "--porcelain=v2", "--branch"]).unwrap_or_default();
+    let [c, ignore] = SHALLOW_SUBMODULES;
+    let porcelain = run_git_raw(path, &[c, ignore, "status", "--porcelain=v2", "--branch"]).unwrap_or_default();
     let summary = parse_status_v2(&porcelain);
 
     // A linked worktree's git-dir differs from its common git-dir; the main worktree's paths match.
@@ -1207,11 +1296,14 @@ pub fn push_branch(wt_path: &str, branch: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether a directory has uncommitted changes.
+/// Whether a directory has uncommitted changes; None when Git could not answer (including a timeout).
+fn worktree_changes(path: &str) -> Option<bool> {
+    run_git(path, &["status", "--porcelain"]).map(|s| !s.is_empty())
+}
+
+/// Whether a directory has uncommitted changes, for previews where an unknown answer reads as clean.
 pub fn worktree_has_changes(path: &str) -> bool {
-    run_git(path, &["status", "--porcelain"])
-        .map(|s| !s.is_empty())
-        .unwrap_or(false)
+    worktree_changes(path).unwrap_or(false)
 }
 
 /// Commit all changes in a directory so a merge can include a child worktree's uncommitted work.
@@ -1716,7 +1808,10 @@ pub fn merge_branches_apply(
     })?;
     // Commit dirty source worktree changes first so the merge can include them.
     if let Some(src_dir) = r.source_dir.as_deref() {
-        if worktree_has_changes(src_dir) {
+        // An unknown answer must not read as clean, or the merge would leave this work behind.
+        let dirty = worktree_changes(src_dir)
+            .ok_or("Couldn't check the source worktree for uncommitted changes. Try again.")?;
+        if dirty {
             let msg = commit_message
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
@@ -1949,39 +2044,25 @@ const LINE_COUNT_BUDGET_BYTES: u64 = 32 * 1024 * 1024;
 /// a bounded amount of time and memory. Returns the entries and whether the listing was cut off.
 pub(crate) fn path_status_limited(cwd: &str, limit: usize) -> Result<(Vec<PathStatus>, bool), String> {
     use std::io::BufRead;
-    let mut child = crate::host::command("git")
-        .args(["--no-optional-locks", "-C", cwd, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "."])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn().map_err(|e| format!("Failed to read Git status: {e}"))?;
-    let stdout = child.stdout.take().ok_or("Failed to read Git status")?;
-    let fields = std::io::BufReader::new(stdout).split(0).map_while(Result::ok);
-    let (entries, truncated) = collect_path_status(fields, limit);
-    if truncated {
-        // The rest of the output is not wanted; without this Git keeps walking the tree.
-        let _ = child.kill();
-        let _ = child.wait();
-        return Ok((entries, true));
-    }
-    let status = child.wait().map_err(|e| format!("Failed to read Git status: {e}"))?;
-    if !status.success() {
-        return Err("Failed to read Git status".into());
-    }
-    Ok((entries, false))
+    let [c, ignore] = SHALLOW_SUBMODULES;
+    let args = [c, ignore, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "."];
+    // Past the limit the rest of the output is not wanted; Git is stopped instead of walking the tree.
+    read_git(cwd, &args, READ_TIMEOUT, move |stdout| {
+        let fields = std::io::BufReader::new(stdout).split(0).map_while(Result::ok);
+        let listing = collect_path_status(fields, limit);
+        let truncated = listing.1;
+        (listing, truncated)
+    })
+    .ok_or_else(|| "Failed to read Git status".into())
 }
 
 /// Read machine-safe status without taking Git's optional background index lock.
 pub(crate) fn path_status(cwd: &str, all_untracked: bool) -> Result<Vec<PathStatus>, String> {
-    let out = crate::host::command("git")
-        .args(["--no-optional-locks", "-C", cwd, "status", "--porcelain=v1", "-z"])
-        .arg(if all_untracked { "--untracked-files=all" } else { "--untracked-files=normal" })
-        .args(["--", "."])
-        .output().map_err(|e| format!("Failed to read Git status: {e}"))?;
-    if !out.status.success() {
-        return Err("Failed to read Git status".into());
-    }
-    Ok(parse_path_status(&out.stdout))
+    let [c, ignore] = SHALLOW_SUBMODULES;
+    let untracked = if all_untracked { "--untracked-files=all" } else { "--untracked-files=normal" };
+    let out = run_git_bytes(cwd, &[c, ignore, "status", "--porcelain=v1", "-z", untracked, "--", "."])
+        .ok_or("Failed to read Git status")?;
+    Ok(parse_path_status(&out))
 }
 
 /// Shared file decoration; unmerged records take precedence over their individual sides.
@@ -3392,6 +3473,92 @@ mod porcelain_tests {
         git(&dir, &["commit", "-q", "-m", "init"]);
         git(&dir, &["branch", "-M", "main"]);
         dir
+    }
+
+    #[test]
+    fn branch_metadata_does_not_read_index_and_handles_worktrees() {
+        let repo = init_repo();
+        let cwd = repo.to_str().unwrap();
+        let wt = repo.join("linked");
+        git(&repo, &["worktree", "add", "-qb", "feature", wt.to_str().unwrap()]);
+        let linked = branch_info(wt.to_str().unwrap());
+        assert!(linked.is_repo && linked.is_worktree);
+        assert_eq!(linked.branch.as_deref(), Some("feature"));
+        assert!(linked.worktree_path.is_some());
+        git(&wt, &["checkout", "--detach", "-q"]);
+        assert!(branch_info(wt.to_str().unwrap()).branch.is_none());
+        // A full status scan fails on this index; branch metadata must still succeed unchanged.
+        std::fs::write(repo.join(".git/index"), b"intentionally invalid index").unwrap();
+        let main = branch_info(cwd);
+        assert!(main.is_repo && !main.is_worktree);
+        assert_eq!(main.branch.as_deref(), Some("main"));
+        assert!(main.worktree_path.is_none());
+        let _ = std::fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn panel_status_reports_moved_submodules_but_not_their_edits() {
+        let upstream = init_repo();
+        let repo = init_repo();
+        git(&repo, &["-c", "protocol.file.allow=always", "submodule", "add", "-q", upstream.to_str().unwrap(), "sub"]);
+        git(&repo, &["commit", "-q", "-m", "add sub"]);
+        let sub = repo.join("sub");
+        git(&sub, &["config", "user.email", "t@example.com"]);
+        git(&sub, &["config", "user.name", "tester"]);
+        git(&sub, &["config", "commit.gpgsign", "false"]);
+        let cwd = repo.to_str().unwrap();
+        let listed = |cwd: &str| changed_files(cwd).unwrap().iter().any(|f| f.path == "sub");
+        let counts = |cwd: &str| { let s = status(cwd); (s.staged, s.unstaged, s.untracked) };
+
+        // Edits inside the submodule stay with the submodule, the expensive part of a refresh.
+        std::fs::write(sub.join("a.txt"), "edited\n").unwrap();
+        std::fs::write(sub.join("new.txt"), "new\n").unwrap();
+        assert_eq!(counts(cwd), (0, 0, 0));
+        assert!(!listed(cwd));
+        assert!(path_status(cwd, true).unwrap().is_empty());
+
+        // A submodule's own setting still wins over the default.
+        git(&repo, &["config", "submodule.sub.ignore", "none"]);
+        assert!(listed(cwd));
+        git(&repo, &["config", "--unset", "submodule.sub.ignore"]);
+
+        // A moved commit is a superproject change and is listed.
+        git(&sub, &["commit", "-qam", "move"]);
+        assert_eq!(counts(cwd), (0, 1, 0));
+        assert!(listed(cwd));
+        let _ = std::fs::remove_dir_all(&repo);
+        let _ = std::fs::remove_dir_all(&upstream);
+    }
+
+    #[test]
+    fn background_reads_stop_at_the_timeout_with_their_helpers() {
+        let repo = init_repo();
+        let marker = repo.join("helper-survived");
+        // A shell alias runs `sleep` as a helper process; the marker appears only if it outlives the timeout.
+        let alias = "alias.hang=!sleep 1 && touch helper-survived";
+        let started = Instant::now();
+        let out = read_git(repo.to_str().unwrap(), &["-c", alias, "hang"], Duration::from_millis(300), |mut stdout| {
+            let mut buf = Vec::new();
+            let _ = stdout.read_to_end(&mut buf);
+            (buf, false)
+        });
+        assert!(out.is_none());
+        assert!(started.elapsed() < Duration::from_secs(1), "{:?}", started.elapsed());
+        std::thread::sleep(Duration::from_secs(2));
+        assert!(!marker.exists(), "the helper kept running after the timeout");
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn branch_metadata_handles_unborn_branches_and_missing_directories() {
+        let dir = std::env::temp_dir().join(format!("vlx-branch-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!branch_info(dir.to_str().unwrap()).is_repo);
+        git(&dir, &["init", "-q"]);
+        git(&dir, &["symbolic-ref", "HEAD", "refs/heads/unborn"]);
+        assert_eq!(branch_info(dir.to_str().unwrap()).branch.as_deref(), Some("unborn"));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(!branch_info(dir.to_str().unwrap()).is_repo);
     }
 
     /// Raw paths retain Unicode, quotes, whitespace, tabs, and newlines regardless of core.quotepath.

@@ -1,3 +1,69 @@
+## v0.2.14 — 2026-10-23
+
+- 🔌 Remote-Verbindungen brechen nicht mehr jede Sekunde ab und verbinden sich neu, wenn mehrere lange Gespräche geöffnet sind; diese Gespräche lassen sich wieder normal öffnen.
+- ⏹️ SSH- und WSL-Verbindungen zeigen während des Verbindungsaufbaus die Schaltfläche „Abbrechen“, mit der Sie in jeder Phase abbrechen können, auch während der Server vorbereitet wird; während einer laufenden Verbindung bricht auch „Abbrechen“ im Passwortdialog sie ab.
+- 🌿 Sitzungsbaum und Branch-Anzeigen häufen in großen Repositorys keine Git-Prozesse mehr an, und Git-Lesevorgänge im Hintergrund werden nach 30 Sekunden beendet, statt hängen zu bleiben.
+- 🧩 Das Git-Panel aktualisiert sich in Repositorys mit Submodulen deutlich schneller: Änderungen innerhalb eines Submoduls führen nicht mehr dazu, dass es im übergeordneten Repository aufgeführt wird; ein Submodul, das auf einen neuen Commit zeigt, wird weiterhin aufgeführt.
+- 📁 Gruppen lassen sich in andere Projekte ziehen und nehmen ihre verschachtelten Gruppen und Sitzungen mit; diese Sitzungen starten danach im Ordner des neuen Projekts.
+- ⏳ Beim Öffnen eines langen Gesprächs erscheint eine kleine Anzeige „Unterhaltung wird geladen…“ statt „Der Verlauf wird noch indexiert“.
+- 🖱️ Das Kontextmenü einer Sitzung zeigt „Prozess beenden“, solange der Prozess der Sitzung läuft – auch wenn er von einem anderen Client gestartet wurde –, und blendet den Eintrag aus, sobald der Prozess beendet ist.
+
+## v0.2.13 — 2026-10-22
+
+- 📱 Auf dem Smartphone öffnen sich Agenten in der Terminalansicht direkt im Terminal, mit einem schwebenden Eingabefeld, in dem Sie ganze Nachrichten schreiben oder diktieren können; kleine Schaltflächen „Transkript“ und „Terminal“ in der Kopfzeile wechseln zwischen beiden, und das Transkript schlägt nicht mehr den Wechsel zur Gesprächsansicht vor.
+- 🔑 Über geteilte Verbindungen kann der Besitzer des Hosts das Terminal von Agenten in der Terminalansicht öffnen und darin tippen, und die Sitzungsliste zeigt auch Agenten ohne Gesprächsansicht wie Kiro; eingeladene Konten sehen weiterhin ein schreibgeschütztes Transkript.
+- 🌐 Wenn Sie eine Antwort in einer inaktiven Sitzung manuell übersetzen, erscheint die Übersetzung statt „Die Übersetzung ist nicht verfügbar“.
+- 📜 Während Sie in einem langen Gespräch nach oben scrollen, landen neue Antworten nicht mehr hinter „Neuere Nachrichten laden“, und beim Herunterscrollen aus älterem Verlauf werden neuere Nachrichten automatisch geladen.
+- 🧭 Die Smartphone-Ansicht bietet „Zur Desktop-Version wechseln“ nicht mehr an, und Smartphones, die früher gewechselt haben, kehren automatisch zur Smartphone-Ansicht zurück.
+- 🧹 Laufaufzeichnungen von `vrun` werden 24 Stunden nach dem Ende der Aufgabe automatisch gelöscht.
+
+## v0.2.12 — 2026-10-20
+
+- 🛑 Das Stoppen eines Claude-Durchgangs in der Gesprächsansicht wirkt sofort, und Ihre nächste Nachricht wird direkt gesendet – auch wenn der Computer stark ausgelastet ist.
+- 🪟 Menükürzel wie Cmd+D und Klicks auf Benachrichtigungen wirken nur im zugehörigen Fenster, sodass Remote-Fenster nicht mehr zusammen mit dem Hauptfenster geteilt werden.
+- 🔎 Die globale Suche liefert bereits während der Indizierung Ergebnisse und zeigt an, wie viele Sitzungen noch indiziert werden.
+- ⚡ Die globale Suche indiziert Claude-, Codex-, Pi- und OMP-Gespräche direkt aus ihren Dateien – deutlich schneller und ohne den Verlaufscache der Gespräche zu füllen –, und ein geöffnetes Ergebnis springt genau zur passenden Nachricht.
+- 🧠 Der Gesprächsverlauf wird direkt aus den Originalaufzeichnungen der Agenten gelesen statt aus einer separaten Kopie auf dem Datenträger; beim Start werden die Ordner `chat-index` und `chat-spool` entfernt, um Speicherplatz freizugeben.
+- 📱 Auf dem Smartphone schlagen Sitzungen in der Terminalansicht den Wechsel zur Gesprächsansicht vor; nach Ihrer Bestätigung wechselt auch die Desktop-App die Sitzung.
+- 👀 Geteilte Verbindungen listen Sitzungen in der Terminalansicht schreibgeschützt auf, und nur der Besitzer des Hosts kann sie auf die Gesprächsansicht umstellen.
+- 🌐 Die Übersetzungseinstellungen enthalten neu „Übersetzung standardmäßig aktivieren“, das den anfänglichen Übersetzungsstatus von Sitzungen ohne gespeicherte Auswahl festlegt.
+- 🌳 Der Sitzungsbaum fasst Sitzungen, die denselben Worktree verwenden, unter einer gemeinsamen Worktree-Zeile zusammen.
+- 📄 Kurze Antworten in der Gesprächsansicht, auch Nachrichten mit Bildern, zeigen keinen Link „Vollständigen Inhalt lesen“ mehr.
+- 🔕 Die Schaltfläche zum Löschen aller Benachrichtigungsmarkierungen befindet sich jetzt am linken Ende der unteren Leiste des Sitzungsbaums.
+- 🤖 Die Dialoge für neue und fortgesetzte Sitzungen zeigen Agentensymbole in der Liste der Agententypen, und die Berechtigungsliste öffnet sich nach oben, wenn darunter nicht genug Platz ist.
+- 🩹 Die Gesprächsansicht meldet bei stark beanspruchtem Speicher keine fehlerhaften Einträge im Verlauf mehr und lädt kurz darauf weiter.
+- 📝 Im Markdown-Editor entfernen Rücktaste und Umschalt+Tab die Nummerierung eines leeren Listeneintrags oder eines nicht nummerierten Absatzes innerhalb einer Liste.
+- 🔵 Der Chip „Aufgaben“ in der Gesprächsansicht wird cyanfarben – in der Farbe, die der Sitzungsbaum für Hintergrundarbeit verwendet –, solange noch Hintergrundaufgaben laufen; laufende Aufgaben erscheinen in der Aufgabenliste ebenfalls in Cyan und mit dem Hinweis „Läuft“.
+- 🗑️ Beim Löschen einer Sitzung wird nicht mehr angeboten, Git-Worktrees zu entfernen; dafür gibt es „Delete worktree…“.
+- 🔁 Der Übersetzungsstatus wird bei jeder Änderung aktualisiert statt alle 10 Sekunden, und die Übersetzungseinstellungen prüfen die installierten Agenten bei jedem Öffnen erneut.
+- 💤 Der Infobereich unterbricht die Erfassung der Prozessressourcen, solange das Fenster ausgeblendet ist.
+- ⏱️ Arbeitsanzeige und Durchgangstimer der Gesprächsansicht fehlen nicht mehr und bleiben nicht mehr stehen, wenn ein Durchgang beginnt oder endet, während Sie die Sitzung wechseln.
+- 🔗 `vrefer` nummeriert Nachrichten genauso wie `vsearch`, und bei abgezweigten Codex-Sitzungen enthalten `vrefer` und die globale Suche auch den Verlauf des übergeordneten Gesprächs.
+
+## v0.2.11 — 2026-10-18
+
+- 🧪 Experimentelle HTML-Vorschauen öffnen sich neben Unterhaltungen oder in Tabs, aktualisieren sich bei Dateiänderungen und bieten Quelltext, Konsole und Versionsfunktionen; die native und plattformübergreifende Abnahme steht noch aus.
+- 📜 Lange Unterhaltungen laden ältere Nachrichten seitenweise und lange Inhalte bei Bedarf, während Claude und Codex Nachrichten und Werkzeuge im laufenden Gespräch ohne Duplikate anzeigen.
+- 🔎 Die globale Suche aktualisiert geänderte Unterhaltungen schneller, setzt die Indizierung nach Unterbrechungen fort und überspringt unlesbare Unterhaltungen, solange deren Dateien unverändert bleiben.
+- 📊 Die Anzahl geänderter Dateien im Infobereich öffnet eine Liste der in diesem Durchgang bearbeiteten Dateien mit verfügbaren Zahlen hinzugefügter und entfernter Zeilen.
+- 🗂️ Archivierte Unterhaltungen erscheinen in kompakten Zeilen entsprechend ihren ursprünglichen Projekten, Gruppen und übergeordneten Sitzungen, mit einklappbaren Projekten und Funktionen zum vollständigen Ein- und Ausklappen.
+- 🧩 Plugin-Skills des Codex-Kontos erscheinen in den Vervollständigungsvorschlägen, deren Menüs sich mit den Pfeiltasten bedienen lassen.
+- ⌨️ Unter Windows und Linux kopiert Strg+Umschalt+C markierten Terminaltext; das Kürzel lässt sich unter Einstellungen ▸ Tastenkürzel ändern.
+- 🧹 Nach `/clear` im Claude-Terminal wird die gelöschte Unterhaltung beim erneuten Öffnen oder beim Wechsel zur Gesprächsansicht nicht mehr fortgesetzt.
+- 📏 Der Infobereich zeigt bei OpenCode-Unterhaltungen das Kontextlimit des Modells.
+- 🌐 Die Übersetzung bietet Bing Translator ohne API-Schlüssel, kompakte Spracheinstellungen und die Übersetzung bearbeiteter Claude- und Codex-Nachrichten vor dem erneuten Senden.
+- 🔤 Vorhandene Übersetzungen bleiben nach einem Wechsel von Übersetzungsdienst oder Modell sichtbar und können erneut übersetzt werden.
+- ⏱️ `vrun` meldet alle 180 Sekunden den Fortschritt mit Exit-Code 75, setzt das Warten mit `--wait` fort und schützt laufende Aufgaben vor der Wiederverwendung desselben Namens.
+- 🧵 Claude-Antworten nach Abschluss einer Hintergrundaufgabe erhalten eine eigene Aufgabenübersicht und Gesprächsgrenze, auch im Verlauf.
+- ⚠️ Beim Wechsel zwischen Terminal- und Gesprächsansicht wird um Bestätigung gebeten, wenn Hintergrundaufgaben laufen.
+- 🏠 Sitzungen ohne Arbeitsverzeichnis oder mit nicht mehr vorhandenem Verzeichnis starten in beiden Ansichten im persönlichen Ordner.
+- 🪟 Unter Windows fordern weder der Start von VelaTerm noch das Verbindungsfenster zur WSL-Installation auf, wenn keine Distribution registriert ist.
+- 🔐 Fehlgeschlagene Fernanmeldungen zählen auch dann zum Versuchslimit, wenn die Verbindung während der Passwortprüfung geschlossen wird.
+- 🏷️ Versionsanzeigen der Agenten zeigen bei einer neueren CLI-Version einen ausdrücklichen Link `Update: vX`.
+- 🔵 Anzeigen für Hintergrundaufgaben leuchten dauerhaft cyan, und Statuspunkte bleiben in Tabs und Seitenleiste statt in den Überschriften der Teilfenster.
+- ✍️ Das Eingabefeld für Unterhaltungen hat einen deutlicheren Rand mit äußerer Fokuslinie, und Werte im dunklen Infobereich sind so hell wie ihre Beschriftungen.
+- 🌿 Schaltflächen zum Klonen von Projekten verwenden ein Branch-Symbol mit Projektmarkierung.
+
 ## v0.2.10 — 2026-10-13
 
 - 🧩 OpenCode v2 wird zusätzlich zu v1 unterstützt, und die Modellliste lädt auch mit OpenCode v2.0.26 korrekt.

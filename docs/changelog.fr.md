@@ -1,3 +1,69 @@
+## v0.2.14 — 2026-10-23
+
+- 🔌 Les connexions distantes ne se coupent plus et ne se reconnectent plus chaque seconde lorsque plusieurs longues conversations sont ouvertes ; ces conversations s’ouvrent de nouveau normalement.
+- ⏹️ Les connexions SSH et WSL affichent un bouton « Arrêter » pendant la connexion, ce qui permet de l’interrompre à n’importe quelle étape, y compris pendant la préparation du serveur ; pendant une connexion, « Annuler » dans la boîte de dialogue du mot de passe l’interrompt également.
+- 🌿 L’arborescence des sessions et les libellés de branche n’accumulent plus de processus Git dans les grands dépôts, et les lectures Git en arrière-plan s’arrêtent au bout de 30 secondes au lieu de rester bloquées.
+- 🧩 Le panneau Git se met à jour beaucoup plus vite dans les dépôts comportant des sous-modules : des modifications à l’intérieur d’un sous-module ne le font plus apparaître dans le dépôt parent, mais un sous-module qui pointe vers un nouveau commit reste listé.
+- 📁 Les groupes peuvent être glissés vers d’autres projets avec leurs groupes imbriqués et leurs sessions, et ces sessions démarrent ensuite dans le dossier du nouveau projet.
+- ⏳ À l’ouverture d’une longue conversation, un petit indicateur « Chargement de la conversation… » remplace « L’indexation de l’historique est en cours ».
+- 🖱️ Le menu contextuel des sessions affiche « Tuer le processus » tant que le processus de la session est en cours d’exécution, y compris lorsqu’il a été lancé depuis un autre client, et le masque une fois le processus terminé.
+
+## v0.2.13 — 2026-10-22
+
+- 📱 Sur téléphone, les agents exécutés dans la vue terminal s’ouvrent directement sur le terminal, avec une zone de saisie flottante pour rédiger ou dicter des messages entiers ; de petits boutons « Transcription » et « Terminal » dans l’en-tête permettent de passer de l’un à l’autre, et la transcription ne propose plus de passer à la vue conversation.
+- 🔑 Sur les connexions partagées, le propriétaire de l’hôte peut ouvrir le terminal des agents exécutés dans la vue terminal et y saisir du texte, et la liste des sessions affiche aussi les agents sans vue conversation, comme Kiro ; les comptes invités voient toujours une transcription en lecture seule.
+- 🌐 Traduire manuellement une réponse dans une session inactive affiche la traduction au lieu de « Traduction indisponible ».
+- 📜 Quand vous remontez dans une longue conversation, les nouvelles réponses ne restent plus bloquées derrière « Charger les messages plus récents », et redescendre depuis l’historique plus ancien charge automatiquement les messages plus récents.
+- 🧭 La vue téléphone ne propose plus « Passer à la version bureau », et les téléphones qui étaient passés à la version bureau reviennent automatiquement à la vue téléphone.
+- 🧹 Les enregistrements d’exécution de `vrun` sont supprimés automatiquement 24 heures après la fin de la tâche.
+
+## v0.2.12 — 2026-10-20
+
+- 🛑 L’arrêt d’un tour Claude dans la vue conversation prend effet immédiatement, et votre message suivant part aussitôt, même lorsque l’ordinateur est très sollicité.
+- 🪟 Les raccourcis de menu comme Cmd+D et les clics sur les notifications n’agissent que dans la fenêtre concernée : les fenêtres distantes ne se divisent plus en même temps que la fenêtre principale.
+- 🔎 La recherche globale renvoie des résultats pendant l’indexation et indique combien de sessions restent à indexer.
+- ⚡ La recherche globale indexe les conversations Claude, Codex, Pi et OMP directement depuis leurs fichiers, bien plus vite et sans remplir le cache d’historique des conversations, et l’ouverture d’un résultat mène au message exact.
+- 🧠 L’historique des conversations est lu directement dans les enregistrements d’origine des agents plutôt que dans une copie distincte sur le disque ; les dossiers `chat-index` et `chat-spool` sont supprimés au démarrage pour libérer de l’espace disque.
+- 📱 Sur téléphone, les sessions exécutées dans la vue terminal proposent de passer à la vue conversation ; après confirmation, l’application de bureau bascule aussi la session.
+- 👀 Les connexions partagées affichent en lecture seule les sessions exécutées dans la vue terminal, et seul le propriétaire de l’hôte peut les passer en vue conversation.
+- 🌐 Les paramètres de traduction ajoutent « Activer la traduction par défaut », qui définit l’état initial de la traduction pour les sessions sans choix enregistré.
+- 🌳 L’arborescence des sessions regroupe sous une même ligne de worktree les sessions qui utilisent ce worktree.
+- 📄 Les réponses courtes dans la vue conversation, y compris les messages avec images, n’affichent plus le lien « Lire le contenu intégral ».
+- 🔕 Le bouton qui efface tous les badges de notification se trouve désormais à l’extrémité gauche de la barre inférieure de l’arborescence des sessions.
+- 🤖 Les boîtes de dialogue de nouvelle session et de reprise de session affichent l’icône de chaque agent dans la liste des types d’agent, et la liste des autorisations s’ouvre vers le haut quand la place manque en dessous.
+- 🩹 La vue conversation ne signale plus d’enregistrements endommagés dans l’historique lorsque le stockage est très sollicité, et reprend le chargement peu après.
+- 📝 Dans l’éditeur Markdown, Retour arrière et Maj+Tab retirent la numérotation d’un élément de liste vide ou d’un paragraphe non numéroté à l’intérieur d’une liste.
+- 🔵 La puce « Tâches » de la vue conversation passe au cyan, la couleur qu’utilise l’arborescence des sessions pour le travail en arrière-plan, tant que des tâches d’arrière-plan sont en cours ; dans la liste des tâches, celles qui sont en cours s’affichent aussi en cyan avec la mention « En cours ».
+- 🗑️ La suppression d’une session ne propose plus de retirer les worktrees git ; utilisez « Delete worktree… » pour en retirer un.
+- 🔁 L’état de la traduction se met à jour dès qu’il change, et non plus toutes les 10 secondes, et les paramètres de traduction revérifient les agents installés à chaque ouverture.
+- 💤 Le panneau Info suspend l’échantillonnage des ressources du processus tant que la fenêtre est masquée.
+- ⏱️ L’indicateur d’activité et le minuteur du tour dans la vue conversation ne disparaissent plus et ne restent plus affichés à tort lorsqu’un tour commence ou se termine pendant que vous changez de session.
+- 🔗 `vrefer` numérote les messages de la même façon que `vsearch`, et pour les sessions Codex dérivées, `vrefer` et la recherche globale incluent l’historique de la conversation parente.
+
+## v0.2.11 — 2026-10-18
+
+- 🧪 Les aperçus HTML expérimentaux s’ouvrent à côté des conversations ou dans des onglets, s’actualisent avec les fichiers et proposent source, console et versions ; la validation native et multiplateforme reste à effectuer.
+- 📜 Les longues conversations chargent les anciens messages par pages et développent les contenus longs à la demande, sans doublons de messages ou d’outils dans les conversations Claude et Codex en direct.
+- 🔎 La recherche globale actualise plus vite les conversations modifiées, reprend l’indexation après une interruption et ignore les conversations illisibles tant que leurs fichiers ne changent pas.
+- 📊 Le nombre de fichiers modifiés du panneau Info ouvre la liste des fichiers édités pendant ce tour, avec les nombres de lignes ajoutées et supprimées lorsqu’ils sont disponibles.
+- 🗂️ Les conversations archivées suivent leurs projets, groupes et sessions parentes d’origine dans des lignes compactes, avec des projets repliables et des commandes pour tout développer ou replier.
+- 🧩 Les compétences des plugins du compte Codex apparaissent dans les suggestions de complétion, dont les menus se parcourent avec les flèches.
+- ⌨️ Sous Windows et Linux, Ctrl+Maj+C copie le texte sélectionné dans le terminal et peut être modifié dans Paramètres ▸ Raccourcis.
+- 🧹 Après `/clear` dans le terminal Claude, rouvrir la session ou passer à la vue conversation ne reprend plus la conversation effacée.
+- 📏 Le panneau Info affiche la limite de contexte du modèle pour les conversations OpenCode.
+- 🌐 La traduction ajoute Bing Translator sans clé API, des réglages de langue compacts et la traduction avant le renvoi des messages modifiés dans Claude et Codex.
+- 🔤 Les traductions existantes restent visibles après un changement de moteur ou de modèle et peuvent être retraduites.
+- ⏱️ `vrun` rapporte sa progression toutes les 180 secondes avec le code de sortie 75, permet de poursuivre l’attente avec `--wait` et protège les tâches actives contre la réutilisation de leur nom.
+- 🧵 Les réponses de Claude déclenchées par la fin d’une tâche en arrière-plan ont leur propre résumé de tâche et séparation de conversation, y compris dans l’historique.
+- ⚠️ Le passage entre les vues terminal et conversation demande confirmation lorsque des tâches s’exécutent en arrière-plan.
+- 🏠 Les sessions sans dossier de travail ou dont le dossier a disparu démarrent dans le dossier personnel dans les deux vues.
+- 🪟 Sous Windows, VelaTerm et le panneau de connexion ne proposent plus d’installer WSL lorsqu’aucune distribution n’est enregistrée.
+- 🔐 Les échecs de connexion à distance comptent dans la limite des tentatives même si la connexion se ferme pendant la vérification du mot de passe.
+- 🏷️ Les badges de version des agents affichent un lien explicite `Update: vX` lorsqu’une nouvelle version du CLI est disponible.
+- 🔵 Les indicateurs de tâches en arrière-plan restent cyan sans clignoter, et les points d’état sont conservés dans les onglets et la barre latérale plutôt que dans les titres des volets.
+- ✍️ La bordure de saisie des conversations est plus nette, avec un contour externe au focus, et les valeurs du panneau Info ont la même luminosité que leurs libellés dans le thème sombre.
+- 🌿 Les boutons de clonage de projet utilisent une icône de branche avec un repère de projet.
+
 ## v0.2.10 — 2026-10-13
 
 - 🧩 OpenCode v2 est pris en charge en plus de v1, et la liste des modèles se charge correctement avec OpenCode v2.0.26.

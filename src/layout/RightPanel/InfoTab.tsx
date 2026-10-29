@@ -191,6 +191,8 @@ function ResourcesSection({ pid }: { pid: number | undefined }) {
   useEffect(() => {
     let cancelled = false;
     const sample = () => {
+      // Nobody sees the numbers while the window is hidden; sampling resumes the moment it shows again.
+      if (document.hidden) return;
       if (pid == null) setStats(null);
       else
         processStats(pid)
@@ -205,9 +207,11 @@ function ResourcesSection({ pid }: { pid: number | undefined }) {
     sample();
     // Three seconds still appears live to users while reducing sampling cost by one-third versus 2s.
     const t = setInterval(sample, 3000);
+    document.addEventListener("visibilitychange", sample);
     return () => {
       cancelled = true;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", sample);
     };
   }, [pid, showSystem]);
 
@@ -672,7 +676,7 @@ export function InfoTab({ session, cwd }: { session: Session; cwd: string | null
         </UsageSection>
       )}
 
-      {hasContext && <TurnSection key={session.id} session={session} agentState={agentState} currentTool={currentTool} />}
+      {hasContext && <TurnSection key={session.id} session={session} cwd={cwd} agentState={agentState} currentTool={currentTool} />}
 
       <ResourcesSection pid={runtime?.pid} />
     </div>

@@ -50,7 +50,6 @@ export function ConfirmDelete({
   kind,
   collection,
   batchCount,
-  worktreePaths = [],
   onConfirm,
   onCancel,
 }: {
@@ -59,14 +58,11 @@ export function ConfirmDelete({
   /** Wording only: a collection is a project row with no directory of its own. */
   collection?: boolean;
   batchCount?: number;
-  worktreePaths?: string[];
-  onConfirm: (removeWorktree: boolean) => void | Promise<void>;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }) {
   const t = useT();
   const isBatch = batchCount != null;
-  const hasWt = worktreePaths.length > 0;
-  const [removeWt, setRemoveWt] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +72,7 @@ export function ConfirmDelete({
     busyRef.current = true;
     setBusy(true);
     setError(null);
-    try { await onConfirm(removeWt); }
+    try { await onConfirm(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
     finally { busyRef.current = false; setBusy(false); }
   };
@@ -121,23 +117,6 @@ export function ConfirmDelete({
         <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 18 }}>
           {body}
         </div>
-        {hasWt && (
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 13,
-              color: "var(--text-secondary)",
-              lineHeight: 1.5,
-              marginBottom: 16,
-              cursor: "pointer",
-            }}
-          >
-            <input type="checkbox" disabled={busy} checked={removeWt} onChange={(e) => setRemoveWt(e.target.checked)} />
-            {t("tree.deleteWorktrees", worktreePaths.length)}
-          </label>
-        )}
         {error && <div role="alert" style={{ color: "var(--status-error)", marginBottom: 12 }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button className="vlx-btn" disabled={busy} onClick={cancel}>
@@ -1487,7 +1466,7 @@ export function NewAgentSession({
               }
             }}
             options={[
-              ...AGENT_ARGS_KINDS.map((k) => ({ value: `k:${k}`, label: kindLabel(k) })),
+              ...AGENT_ARGS_KINDS.map((k) => ({ value: `k:${k}`, label: kindLabel(k), icon: <span aria-hidden="true" style={{ display: "inline-flex" }}>{kindIconEl(k, 14)}</span> })),
               ...presets.map((p, n) => ({
                 value: `p:${p.id}`,
                 label: p.name,
@@ -1912,7 +1891,7 @@ export function ResumeSession({
           <Select
             value={kind}
             onChange={changeKind}
-            options={RESUMABLE_KINDS.map((opt) => ({ value: opt.kind, label: opt.label }))}
+            options={RESUMABLE_KINDS.map((opt) => ({ value: opt.kind, label: opt.label, icon: <span aria-hidden="true" style={{ display: "inline-flex" }}>{kindIconEl(opt.kind, 14)}</span> }))}
             width="100%"
             ariaLabel={t("resume.agentType")}
           />
