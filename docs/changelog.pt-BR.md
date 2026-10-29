@@ -1,3 +1,69 @@
+## v0.2.14 — 2026-10-23
+
+- 🔌 As conexões remotas não caem nem se reconectam mais a cada segundo quando várias conversas longas estão abertas, e essas conversas voltam a abrir normalmente.
+- ⏹️ As conexões SSH e WSL mostram um botão “Parar” durante a conexão, para interrompê-la em qualquer etapa, inclusive enquanto o servidor é preparado; durante uma conexão, “Cancelar” na caixa de diálogo de senha também a interrompe.
+- 🌿 A árvore de sessões e os rótulos de branch não acumulam mais processos do Git em repositórios grandes, e as leituras do Git em segundo plano são encerradas após 30 segundos em vez de ficarem travadas.
+- 🧩 O painel Git atualiza muito mais rápido em repositórios com submódulos: alterações dentro de um submódulo não fazem mais com que ele apareça no repositório principal, e um submódulo que aponta para um novo commit continua aparecendo.
+- 📁 Os grupos podem ser arrastados para outros projetos junto com seus grupos aninhados e suas sessões, que passam a iniciar na pasta do novo projeto.
+- ⏳ Ao abrir uma conversa longa, aparece um pequeno indicador “Carregando a conversa…” em vez de “O histórico ainda está sendo indexado”.
+- 🖱️ O menu de contexto da sessão mostra “Encerrar processo” enquanto o processo da sessão está em execução, inclusive quando foi iniciado por outro cliente, e deixa de mostrá-lo quando o processo termina.
+
+## v0.2.13 — 2026-10-22
+
+- 📱 No celular, agentes em execução na visão de terminal abrem direto no terminal, com uma caixa de entrada flutuante para escrever ou ditar mensagens inteiras; os pequenos botões “Transcrição” e “Terminal” no cabeçalho alternam entre os dois, e a transcrição não sugere mais mudar para a visão de conversa.
+- 🔑 Em conexões compartilhadas, o proprietário do host pode abrir o terminal de agentes em execução na visão de terminal e digitar nele, e a lista de sessões também mostra agentes sem visão de conversa, como o Kiro; contas convidadas continuam vendo uma transcrição somente leitura.
+- 🌐 Traduzir manualmente uma resposta em uma sessão ociosa mostra a tradução em vez de “A tradução está indisponível”.
+- 📜 Enquanto você rola para cima em uma conversa longa, as novas respostas não ficam mais presas atrás de “Carregar mensagens mais recentes”, e rolar para baixo a partir do histórico anterior carrega automaticamente as mensagens mais recentes.
+- 🧭 A visão para celular não oferece mais “Mudar para a versão desktop”, e os celulares que mudaram antes voltam automaticamente à visão para celular.
+- 🧹 Os registros de execução do `vrun` são excluídos automaticamente 24 horas depois que a tarefa termina.
+
+## v0.2.12 — 2026-10-20
+
+- 🛑 Interromper um turno do Claude na visão de conversa tem efeito imediato, e a próxima mensagem é enviada na hora, mesmo quando o computador está muito sobrecarregado.
+- 🪟 Atalhos de menu como Cmd+D e cliques em notificações agem apenas na janela correspondente, então as janelas remotas não são mais divididas junto com a janela principal.
+- 🔎 A busca global retorna resultados enquanto a indexação ainda está em andamento e mostra quantas sessões ainda estão sendo indexadas.
+- ⚡ A busca global indexa as conversas do Claude, Codex, Pi e OMP diretamente dos arquivos, de forma muito mais rápida e sem encher o cache do histórico de conversas, e abrir um resultado leva exatamente à mensagem correspondente.
+- 🧠 O histórico de conversas é lido diretamente dos registros originais dos agentes, em vez de uma cópia separada no disco, e as pastas `chat-index` e `chat-spool` são removidas na inicialização para liberar espaço em disco.
+- 📱 No celular, sessões em execução na visão de terminal sugerem mudar para a visão de conversa; depois da confirmação, o aplicativo desktop também muda a sessão.
+- 👀 Conexões compartilhadas listam as sessões em execução na visão de terminal como somente leitura, e só o proprietário do host pode mudá-las para a visão de conversa.
+- 🌐 As configurações de tradução ganham “Ativar tradução por padrão”, que define o estado inicial da tradução nas sessões sem uma escolha salva.
+- 🌳 A árvore de sessões agrupa sob uma única linha de worktree as sessões que usam o mesmo worktree.
+- 📄 Respostas curtas na visão de conversa, inclusive mensagens com imagens, não exibem mais o link “Ler o conteúdo completo”.
+- 🔕 O botão que limpa todos os indicadores de notificação passou para a extremidade esquerda da barra inferior da árvore de sessões.
+- 🤖 As caixas de diálogo de nova sessão e de retomar sessão mostram o ícone de cada agente na lista de tipos de agente, e a lista de permissões abre para cima quando não há espaço suficiente abaixo.
+- 🩹 A visão de conversa não informa mais que o histórico contém registros corrompidos quando o armazenamento está ocupado, e continua carregando logo em seguida.
+- 📝 No editor de Markdown, Backspace e Shift+Tab removem a numeração de um item de lista vazio ou de um parágrafo sem numeração dentro de uma lista.
+- 🔵 O chip “Tarefas” na visão de conversa fica ciano, a cor que a árvore de sessões usa para trabalho em segundo plano, enquanto ainda houver tarefas em segundo plano em execução, e na lista de tarefas as que estão em execução também aparecem em ciano com o rótulo “Em execução”.
+- 🗑️ Excluir uma sessão não oferece mais a remoção de worktrees do git; para remover um, use “Delete worktree…”.
+- 🔁 O status da tradução é atualizado quando muda, e não mais a cada 10 segundos, e as configurações de tradução verificam novamente os agentes instalados sempre que são abertas.
+- 💤 O painel Info pausa a coleta de recursos do processo enquanto a janela está oculta.
+- ⏱️ O indicador de trabalho e o cronômetro do turno na visão de conversa não somem mais nem ficam visíveis indevidamente quando um turno começa ou termina enquanto você troca de sessão.
+- 🔗 `vrefer` numera as mensagens da mesma forma que `vsearch`, e nas sessões do Codex bifurcadas, `vrefer` e a busca global incluem o histórico da conversa de origem.
+
+## v0.2.11 — 2026-10-18
+
+- 🧪 As prévias HTML experimentais abrem ao lado das conversas ou em abas, atualizam com as alterações dos arquivos e oferecem controles de código, console e versões; a validação nativa e entre plataformas ainda está pendente.
+- 📜 Conversas longas carregam mensagens antigas em páginas e expandem conteúdos extensos sob demanda, sem duplicar mensagens ou ferramentas nas conversas ao vivo do Claude e do Codex.
+- 🔎 A busca global atualiza conversas alteradas mais rapidamente, retoma a indexação após interrupções e ignora conversas ilegíveis enquanto seus arquivos não mudam.
+- 📊 A contagem de arquivos alterados no painel Info abre uma lista dos arquivos editados neste turno com as linhas adicionadas e removidas, quando disponíveis.
+- 🗂️ Conversas arquivadas seguem seus projetos, grupos e sessões superiores originais em linhas compactas, com projetos recolhíveis e controles para expandir ou recolher tudo.
+- 🧩 As habilidades dos plugins da conta Codex aparecem nas sugestões de preenchimento, e os menus permitem selecionar com as teclas de seta.
+- ⌨️ No Windows e no Linux, Ctrl+Shift+C copia o texto selecionado no terminal, e o atalho pode ser alterado em Configurações ▸ Atalhos.
+- 🧹 Após `/clear` no terminal do Claude, reabrir a sessão ou mudar para a visualização de conversa não retoma mais a conversa apagada.
+- 📏 O painel Info mostra o limite de contexto do modelo nas conversas do OpenCode.
+- 🌐 A tradução inclui Bing Translator sem chave de API, configurações compactas de idioma e tradução antes de reenviar mensagens editadas do Claude e do Codex.
+- 🔤 As traduções existentes continuam visíveis após mudar o mecanismo ou modelo de tradução e podem ser traduzidas novamente.
+- ⏱️ `vrun` informa o progresso a cada 180 segundos com o código de saída 75, permite continuar a espera com `--wait` e protege tarefas em execução contra a reutilização do mesmo nome.
+- 🧵 Respostas do Claude iniciadas pela conclusão de tarefas em segundo plano têm seu próprio resumo da tarefa e separação de conversa, inclusive no histórico.
+- ⚠️ A troca entre as visualizações de terminal e conversa pede confirmação enquanto houver tarefas em segundo plano em execução.
+- 🏠 Sessões sem diretório de trabalho ou cujo diretório não existe mais iniciam na pasta pessoal em ambas as visualizações.
+- 🪟 No Windows, iniciar o VelaTerm ou abrir o painel de conexão não solicita mais a instalação do WSL quando não há distribuições registradas.
+- 🔐 Falhas de login remoto contam para o limite de tentativas mesmo quando a conexão fecha durante a verificação da senha.
+- 🏷️ Os indicadores de versão dos agentes mostram um link explícito `Update: vX` quando há uma versão mais recente do CLI.
+- 🔵 Os indicadores de tarefas em segundo plano ficam em ciano contínuo, e os pontos de status permanecem nas abas e na barra lateral, sem aparecer nos títulos dos painéis.
+- ✍️ As bordas da entrada de conversa estão mais nítidas, com um contorno externo ao receber foco, e os valores do painel Info têm o mesmo brilho dos rótulos no tema escuro.
+- 🌿 Os botões para clonar projetos usam um ícone de ramificação com um marcador de projeto.
+
 ## v0.2.10 — 2026-10-13
 
 - 🧩 O OpenCode v2 é compatível junto com o v1, e a lista de modelos carrega corretamente no OpenCode v2.0.26.

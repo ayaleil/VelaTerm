@@ -5,8 +5,15 @@ import type en from "./en";
 const es: typeof en = {
   "panel.averageOutput": "salida media",
   "panel.averageOutputHint": "Estimación de los tokens generados por segundo durante el tiempo de respuesta medido, incluidos los tokens de razonamiento declarados. Excluye la ejecución de herramientas y la espera del usuario. No se muestra ningún valor si el uso y el tiempo no se pueden relacionar de forma fiable. No representa la velocidad de decodificación pura del modelo.",
+  "panel.turnStats": "Estadísticas del turno",
+  "panel.fileCount": (n: number) => n === 1 ? "1 archivo" : `${n} archivos`,
+  "panel.showChangedFiles": "Mostrar los archivos modificados en este turno",
+  "panel.noFilesChanged": "No se editó ningún archivo en este turno.",
+  "panel.shellEditsNotListed": "Las modificaciones realizadas con comandos de shell no se incluyen.",
   "translation.swap": "Intercambiar idiomas",
   "translation.openai": "Compatible con OpenAI",
+  "translation.bing": "Traductor de Bing (sin clave de API)",
+  "translation.bingHint": "Traducción gratuita con Bing. No requiere una clave de API ni una cuenta de Microsoft.",
   "translation.google": "Traductor de Google (sin clave de API)",
   "translation.googleHint": "Traducción gratuita con Google. No requiere una clave de API ni una cuenta de Google.",
   "translation.rateLimited": "Demasiadas solicitudes de traducción. Vuelva a intentarlo más tarde.",
@@ -15,6 +22,8 @@ const es: typeof en = {
   "translation.title": "Traducción",
   "translation.enable": "Activar traducción",
   "translation.visibility": "Los controles de traducción aparecen en las conversaciones cuando esta función está activada.",
+  "translation.defaultEnabled": "Activar la traducción de forma predeterminada",
+  "translation.defaultEnabledHint": "Se aplica a las conversaciones sin preferencias de traducción guardadas. Los cambios se guardan automáticamente.",
   "translation.conversationKinds": "Tipos de agente de las conversaciones",
   "translation.conversationKindsHint": "Los controles de traducción y la traducción automática solo se aplican a las conversaciones con los tipos de agente seleccionados. Los cambios se guardan automáticamente.",
   "translation.chooseConversationKinds": "Seleccionar tipos de agente",
@@ -293,6 +302,8 @@ const es: typeof en = {
   "memory.collections": "Sesiones archivadas",
   "memory.collectionConversation": "Conversación",
   "memory.collectionEmptyEntries": "Esta conversación aún no tiene artículos de conocimiento.",
+  "memory.collapseAllProjects": "Contraer todos los proyectos",
+  "memory.expandAllProjects": "Expandir todos los proyectos",
   "memory.title": "Base de conocimientos",
   "memory.add": "Añadir a la base de conocimientos",
   "memory.intro": "Organiza el conocimiento por proyecto y sesión. Los artículos guardados son independientes de sus fuentes y se pueden editar manualmente.",
@@ -885,6 +896,7 @@ const es: typeof en = {
   "settings.scSplitDown": "Dividir abajo", // Split down
   "settings.scSearch": "Buscar en la terminal", // Find in terminal
   "settings.scGlobalSearch": "Buscar en todas las sesiones", // Search all sessions
+  "settings.scCopyTerminal": "Copiar la selección de la terminal", // Copy terminal selection
   "settings.scSelectAllTerminal": "Seleccionar todo en la terminal", // Select all in terminal
   "settings.scSaveDoc": "Guardar documento", // Save document
   "settings.scRecording": "Pulsa las teclas…", // Press keys…
@@ -989,6 +1001,7 @@ const es: typeof en = {
   "connect.portPlaceholder": "Puerto", // Port
   "connect.connecting": "Conectando…", // Connecting…
   "connect.connect": "Conectar", // Connect
+  "connect.stop": "Detener",
   "connect.stagePreparing": "Preparando servidor…",
   "connect.stageTransferring": "Transfiriendo servidor…",
   "connect.stageStarting": "Iniciando servidor…",
@@ -1253,8 +1266,6 @@ const es: typeof en = {
     `¿Eliminar el grupo «${name}»? También se eliminarán todos sus subgrupos y sesiones. Esta acción no se puede deshacer.`, // Delete group "{name}"?…
   "tree.deleteSessionBody": (name) =>
     `¿Eliminar la sesión «${name}» (y todas sus sesiones hijas)? Esta acción no se puede deshacer.`, // Delete session "{name}"…
-  "tree.deleteWorktrees": (n) =>
-    `Eliminar también los worktrees de git asociados (${n} en total; puede fallar si el árbol de trabajo tiene cambios)`, // Also remove associated git worktrees…
 
   // Session information dialog
   "info.name": "Nombre", // Name
@@ -1348,6 +1359,7 @@ const es: typeof en = {
   "search.includeArchivedHint":
     "Buscar también en sesiones archivadas (desactivado por defecto)", // Also search archived sessions (off by default)
   "search.searching": "Buscando…", // Searching…
+  "search.progress": (sessions, bytes) => `Buscando… ${sessions} sesiones revisadas · ${bytes} leídos`,
   "search.noResults": "No se encontraron coincidencias", // No matches found
   "search.sessionCount": (n) => (n === 1 ? "1 sesión" : `${n} sesiones`), // n sessions
   "search.matchCount": (n) =>
@@ -1359,6 +1371,8 @@ const es: typeof en = {
   "search.archivedBadge": "Archivada", // Archived
   "search.summary": (m, s) =>
     `${m} ${m === 1 ? "coincidencia" : "coincidencias"} · ${s} ${s === 1 ? "sesión" : "sesiones"}`, // X matches · N sessions
+  "search.pending": (n) =>
+    n === 1 ? "Aún se está indexando 1 sesión, así que puede que los resultados no estén completos." : `Aún se están indexando ${n} sesiones, así que puede que los resultados no estén completos.`, // N sessions are still being indexed, so results may be incomplete
   "search.matchPosition": (n, total) => `${n} de ${total}`, // N of M
   "search.roleTerminal": "Terminal", // Terminal
   "search.collapseGroup": "Contraer", // Collapse
@@ -1764,7 +1778,6 @@ const es: typeof en = {
   "mobile.inputOptions": "Opciones del mensaje",
   "mobile.connections": "Gestionar conexiones",
   "mobile.more": "Más acciones",
-  "mobile.toDesktop": "Cambiar a versión de escritorio", // Switch to desktop
   "mobile.empty1": "No hay sesiones.", // No sessions.
   "mobile.noMatch": "No hay sesiones coincidentes", // No matching sessions
   "mobile.empty2":
@@ -1772,6 +1785,10 @@ const es: typeof en = {
   "mobile.back": "‹ Atrás", // ‹ Back
   "mobile.selCopy": "Copiar", // Copy
   "mobile.selCancel": "Cancelar", // Cancel
+  "mobile.compose": "Escribir un mensaje",
+  "mobile.composePlaceholder": "Escriba un mensaje para enviarlo al terminal",
+  "mobile.showTranscript": "Transcripción",
+  "mobile.showTerminal": "Terminal",
 
   // ── Mobile connection client (apps/mobile start page) ──
   "mobile.phaseConnecting": "Conectando por SSH…",
@@ -1970,6 +1987,7 @@ const es: typeof en = {
   "skills.vspawn": "Crea una sesión secundaria que se encarga de una tarea.",
   "skills.vspawnTree": "Crea una sesión secundaria con su propio worktree.",
   "skills.vopen": "Abre un archivo o una página web en VelaTerm.",
+  "skills.vartifact": "Muestra el trabajo visual como una página HTML en vivo junto a la sesión.", // Show visual work as a live HTML page beside the conversation.
   "skills.vrefer": "Lee la conversación de otra sesión.",
   "skills.vask": "Hace una pregunta sobre otra sesión y obtiene una respuesta breve.",
   "skills.vsearch": "Busca en las conversaciones de todas las sesiones.",
@@ -1988,6 +2006,7 @@ const es: typeof en = {
   "session.showTerminal": "Vista de terminal",
   "session.switchTitle": "Cambiar de vista reinicia el agente",
   "session.switchBody": "El turno en curso se interrumpirá. La conversación se conserva.",
+  "session.switchBodyBackground": "Las tareas en segundo plano que inició el agente pueden detenerse, y el agente no sabrá cuándo terminan. La conversación se conserva.",
   "session.switchConfirm": "Cambiar",
   "session.terminalViewHint": "Haga clic aquí para volver a la vista de terminal.",
   "session.loading": "Leyendo la conversación…",
@@ -2136,6 +2155,7 @@ const es: typeof en = {
   "chat.compaction.manual": "Contexto compactado",
   "chat.compaction.auto": "Contexto compactado automáticamente",
   "chat.compaction.from": (tokens: string) => `desde ${tokens} tokens`,
+  "chat.wake.label": "Tarea en segundo plano finalizada",
   // N steps
   "chat.subagent.steps": (n: number) => (n === 1 ? "1 paso" : `${n} pasos`),
   "chat.subagent.tokens": (tokens: string) => `${tokens} tokens`,
@@ -2447,6 +2467,76 @@ const es: typeof en = {
   "ports.limit": (max) => `Se pueden reenviar como máximo ${max} puertos por conexión`, // At most {max} ports can be forwarded per connection
   "ports.notForwarded": (port) => `El puerto ${port} no está reenviado`, // Port {port} is not forwarded
   "statusbar.ports": (n) => (n === 1 ? "1 puerto reenviado" : `${n} puertos reenviados`), // {n} forwarded ports
+  "chat.history.imageDownloadRequired": "Esta imagen no se puede abrir aquí. Descargue el original para verla.",
+  "chat.history.readBody": "Leer el contenido completo",
+  "chat.history.selectDetail": "Seleccionar un archivo o campo",
+  "chat.history.part": "Parte",
+  "chat.history.copyPart": "Copiar esta parte",
+
+  "chat.history.searchMore": "Más resultados",
+  "chat.history.indexing": "Cargando la conversación…",
+  "chat.history.newer": "Cargar mensajes más recientes",
+
+  "chat.history.copyComplete": "Copiar el contenido completo",
+  "chat.history.downloadComplete": "Descargar el contenido completo",
+  "chat.history.unavailable": "Los detalles del historial de esta sesión no están disponibles.",
+  "chat.history.openViewer": "Abra la vista de detalles para leer el contenido completo.",
+  "chat.history.copyBusy": "El contenido completo ya se está copiando.",
+  "chat.history.clipboardLimit": "Este contenido supera el límite del portapapeles. Descargue el archivo completo.",
+  "chat.history.contentChanged": "El contenido cambió durante la transferencia. Vuelva a cargarlo.",
+  "export.preparing": "Preparando la exportación de la sesión…",
+  "chat.history.windowLimit": "Este mensaje supera el límite de visualización. Cargue o descargue su contenido completo.",
+
+  "chat.history.incomplete": "La conversación aún no se ha cargado por completo. Vuelva a intentarlo en un momento.",
+  "chat.history.indexBusy": "Otro proceso está usando el índice del historial. Vuelva a intentarlo dentro de unos instantes.",
+  "chat.history.unsupported": "El formato de algunas entradas del historial no es compatible. Se ha conservado su contenido original.",
+  "chat.history.canceled": "Se canceló la lectura del historial.",
+  "chat.history.pagedRequired": "Lea este contenido en el historial paginado o en el visor de detalles.",
+  "chat.history.sourceMissing": "Falta una fuente del historial o no se puede acceder a ella.",
+  "chat.history.updateServer": "Actualice el servidor para leer el historial de conversaciones de forma segura.",
+  "chat.history.storagePressure": "El almacenamiento del historial está lleno o no está disponible. Libere espacio y vuelva a intentarlo. Puede seguir controlando el agente.",
+
+  "artifact.preview": "Vista previa", // Preview
+  "artifact.source": "Código fuente", // Source
+  "artifact.split": "Dividida", // Split
+  "artifact.live": "En vivo", // Live
+  "artifact.liveTitle": "Se recarga automáticamente cuando cambia el archivo", // Reloads automatically when the file changes
+  "artifact.offline": "Sin conexión", // Offline
+  "artifact.offlineTitle": "Esta página no puede cargar nada de internet. Haz clic para permitirlo en este archivo.", // This page cannot load anything from the internet. Click to allow it for this file.
+  "artifact.online": "Con conexión", // Online
+  "artifact.onlineTitle": "Esta página puede cargar archivos de internet. Haz clic para volver a bloquearlos.", // This page can load files from the internet. Click to block them again.
+  "artifact.netBlocked": (n: number) => n === 1 ? "Esta página intentó cargar un archivo de internet y se bloqueó." : `Esta página intentó cargar ${n} archivos de internet y se bloquearon.`, // This page tried to load ${n} files from the internet. They were blocked.
+  "artifact.allowForFile": "Permitir en este archivo", // Allow for this file
+  "artifact.errorCount": (n: number) => n === 1 ? "1 error" : `${n} errores`, // ${n} errors
+  "artifact.warningCount": (n: number) => n === 1 ? "1 advertencia" : `${n} advertencias`, // ${n} warnings
+  "artifact.console": "Consola", // Console
+  "artifact.consoleEmpty": "No hay errores ni advertencias.", // No errors or warnings.
+  "artifact.clearConsole": "Borrar", // Clear
+  "artifact.closeConsole": "Cerrar consola", // Close console
+  "artifact.sendToSession": "Enviar a la sesión", // Send to session
+  "artifact.sendToSessionTitle": "Coloca estos errores en el cuadro de mensaje de la sesión que escribió esta página", // Put these errors in the message box of the session that wrote this page
+  "artifact.fileGone": "Este archivo ya no está disponible", // This file is no longer available
+  "artifact.fileGoneBody": (name: string) => `${name} se movió o se eliminó. Ábrelo de nuevo desde su nueva ubicación o cierra esta pestaña.`, // ${name} was moved or deleted. Open it again from its new location, or close this tab.
+  "artifact.reload": "Recargar", // Reload
+  "artifact.openInBrowser": "Abrir en el navegador", // Open in browser
+  "artifact.viewportFit": "Ajustar a la pestaña", // Fit to tab
+  "artifact.viewportDesktop": "Escritorio", // Desktop
+  "artifact.viewportTablet": "Tableta", // Tablet
+  "artifact.viewportPhone": "Teléfono", // Phone
+  "artifact.goToSession": "Ir a la sesión", // Go to session
+  "artifact.versionTitle": (n: number, time: string) => `Versión ${n} · ${time}`, // Version ${n} · ${time}
+  "artifact.viewingVersion": (n: number, time: string) => `Viendo la versión ${n} (guardada: ${time})`, // Viewing version ${n}, saved ${time}
+  "artifact.restoreVersion": "Restaurar esta versión", // Restore this version
+  "artifact.backToLatest": "Volver a la más reciente", // Back to latest
+  "artifact.restoreBody": (n: number) => `El archivo se reemplazará por la versión ${n}. Su contenido actual se conserva en el historial de versiones.`, // The file will be replaced with version ${n}. Its current content stays in the version history.
+  "artifact.restore": "Restaurar", // Restore
+  "artifact.restoreFailed": "No se pudo restaurar la versión. Vuelve a intentarlo.", // The version could not be restored. Please try again.
+  "artifact.openAsTab": "Abrir en una pestaña", // Open as tab
+  "artifact.closePanel": "Cerrar vista previa", // Close preview
+  "artifact.cardOpen": "Abrir", // Open
+  "artifact.cardOpenTitle": "Abrir junto a esta sesión", // Open beside this session
+  "artifact.cardKind": "Página HTML", // HTML page
+  "artifact.frameTitle": (name: string) => `Vista previa de ${name}`, // Preview of ${name}
 };
 
 export default es;

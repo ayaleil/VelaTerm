@@ -1,6 +1,6 @@
 // Approved protocol names. Unknown caller strings are never logged.
 const COMMANDS: &[&str] = &[
-    "translation_settings", "translation_enable", "translation_save", "translation_set_conversation_kinds",
+    "translation_settings", "translation_enable", "translation_save", "translation_set_conversation_kinds", "translation_set_default_enabled",
     "translation_service_save", "translation_service_key", "translation_service_delete", "translation_session",
     "translation_session_save", "translation_prepare", "translation_send",
     "translation_cancel", "translation_reply", "translation_test",
@@ -123,6 +123,7 @@ const COMMANDS: &[&str] = &[
     "fs_watch",
     "get_app_settings",
     "get_git_status",
+    "get_git_branch_info",
     "get_session_cwd",
     "git_abort_operation",
     "git_branch_compare",
@@ -280,6 +281,7 @@ const COMMANDS: &[&str] = &[
     "spawn_skills_installed",
     "ssh_connect",
     "wsl_connect",
+    "connect_cancel",
     "wsl_options",
     "ssh_disconnect",
     "ssh_host_forget",

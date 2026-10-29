@@ -234,7 +234,8 @@ export function readAgentTranscript(
 export interface ChatEvent {
   /** Position in the list. Stable for a given transcript length; used as the React key. */
   index: number;
-  kind: "user" | "assistant" | "thinking" | "tool";
+  /** `wake`: a finished background task that started a turn of its own; `text` holds its summary. */
+  kind: "user" | "assistant" | "thinking" | "tool" | "command" | "wake";
   /** Message body. Absent on a tool row. */
   text?: string;
   /** Possibly empty ISO timestamp. */
@@ -281,8 +282,13 @@ export function exportSessionContext(
 
 /** One matching snippet from search.rs::SearchMatch. */
 export interface SearchMatch {
+  rowId?: string;
+  role?: string | null;
+  timestamp?: string | null;
   /** Transcript message index used as a scroll anchor; null for recordings. */
   messageIndex: number | null;
+  /** Byte offset of the message's first record in its transcript file, which locates it exactly. */
+  recordOffset?: number;
   /**
    * One-based match number within a transcript message or across the recording (the required findNext count).
    */
@@ -326,6 +332,29 @@ export function searchSessionContent(
   return invoke<SessionSearchHit[]>("search_session_content", { query, scope });
 }
 
+export interface ContentSearchPage {
+  jobId: string;
+  status: "pending" | "complete";
+  scannedSessions: number;
+  scannedBytes: number;
+  /** Sessions not brought up to date in time; their newest content may be missing from the results. */
+  pendingSessions?: number;
+  hits?: SessionSearchHit[];
+  totalSessions?: number;
+  totalMatches?: number;
+  nextCursor?: number | null;
+  previousCursor?: number | null;
+}
+export function startContentSearch(query: string, scope: SearchScope): Promise<ContentSearchPage> {
+  return invoke("search_content_start", { query, scope });
+}
+export function contentSearchPage(jobId: string, cursor?: number, before?: number): Promise<ContentSearchPage> {
+  return invoke("search_content_page", { jobId, cursor, before, limit: 10 });
+}
+export function cancelContentSearch(jobId: string): Promise<void> {
+  return invoke("search_content_cancel", { jobId });
+}
+
 /** Info-panel model/context/current-tool snapshot. */
 export interface AgentContextInfo {
   /** Actual model ID from the latest assistant row. */
@@ -345,6 +374,14 @@ export function agentContextInfo(sessionId: string): Promise<AgentContextInfo> {
   return invoke<AgentContextInfo>("agent_context_info", { sessionId });
 }
 
+/** One file the turn edited. Line counts sum every recorded edit to it; both are null when any edit was not countable. */
+export interface TurnChangedFile {
+  /** As the agent wrote it: absolute, or relative to the session folder. */
+  path: string;
+  additions: number | null;
+  deletions: number | null;
+}
+
 /** Backend-owned statistics for the latest root turn and its recorded session. Missing data is null. */
 export interface AgentTurnStats {
   /** Model the latest context reading came from, as the provider reports it. */
@@ -358,6 +395,8 @@ export interface AgentTurnStats {
   sessionTokens: number | null;
   toolsUsed: number | null;
   filesTouched: number | null;
+  /** The files behind `filesTouched`, sorted by path. */
+  changedFiles: TurnChangedFile[] | null;
   contextTokens: number | null;
   contextLimit: number | null;
   contextPercent: number | null;
@@ -531,11 +570,6 @@ export interface WorktreeEntry {
 /** Lists all worktrees including main; non-repositories error so callers can use an empty list. */
 export function listWorktrees(repoRoot: string): Promise<WorktreeEntry[]> {
   return invoke<WorktreeEntry[]>("list_worktrees", { repoRoot });
-}
-
-/** Lists worktrees associated with a session and descendants for deletion confirmation. */
-export function worktreesInSubtree(sessionId: string): Promise<string[]> {
-  return invoke<string[]>("worktrees_in_subtree", { sessionId });
 }
 
 /** Removes a worktree directory; force allows removal with local changes. */

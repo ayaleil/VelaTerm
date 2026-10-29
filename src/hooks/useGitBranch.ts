@@ -1,15 +1,15 @@
 //! Lightweight Git branch/worktree information for pane-header and status-bar branch chips.
 //! Cache by path and deduplicate same-path requests so multiple panes do not probe one repository repeatedly.
 //!
-//! The cache stays live while something displays a path: each displayed repository is watched through the
-//! shared `git_watch` lease, and a change inside its `.git` (a checkout writes HEAD) re-probes the branch.
-//! Window focus re-probes every displayed path, which covers platforms that cannot watch (Linux) and linked
+//! Live branch labels share a watch lease and refresh on HEAD/reference changes. Sidebar icons opt into
+//! cached metadata only: rendering a closed session must not create a persistent watch or poll.
+//! Window focus re-probes every live path, which covers platforms that cannot watch (Linux) and linked
 //! worktrees, whose HEAD lives in the main repository's git directory outside the watched root.
 
 import { useEffect, useState } from "react";
 import { gitWatch } from "../ipc/commands";
 import { onFsChanged } from "../ipc/events";
-import { getGitStatus } from "../ipc/info";
+import { getGitBranchInfo } from "../ipc/info";
 
 /** Git branch and worktree information resolved for a directory. */
 export interface GitBranchInfo {
@@ -37,6 +37,8 @@ const EVENT_DEBOUNCE_MS = 150;
 
 const cache = new Map<string, GitBranchInfo>();
 const inflight = new Map<string, Promise<GitBranchInfo>>();
+/** At most one follow-up per path while a request is running. */
+const pendingRefresh = new Set<string>();
 /** Probe sequence per path; only the newest probe may write the cache, so a slow stale answer cannot win. */
 const seq = new Map<string, number>();
 
@@ -45,6 +47,7 @@ type Listener = (info: GitBranchInfo) => void;
 /** A path some mounted component displays: its listeners and the watched repository root, if any. */
 interface Tracked {
   listeners: Set<Listener>;
+  liveListeners: Set<Listener>;
   /** Root that `fs://changed` events carry for this path; null until the lease answers, or when unwatchable. */
   root: string | null;
 }
@@ -56,14 +59,14 @@ function sameInfo(a: GitBranchInfo, b: GitBranchInfo): boolean {
     a.worktreePath === b.worktreePath;
 }
 
-/** Start or reuse an in-flight probe and populate the cache. `fresh` always starts a new probe, for
- *  re-checks after a change where an older in-flight answer may predate it. */
+/** Serialize probes; a fresh request during a running probe schedules one follow-up. */
 function probe(path: string, fresh = false): Promise<GitBranchInfo> {
-  let p = fresh ? undefined : inflight.get(path);
+  let p = inflight.get(path);
+  if (p && fresh) pendingRefresh.add(path);
   if (!p) {
     const n = (seq.get(path) ?? 0) + 1;
     seq.set(path, n);
-    const req = getGitStatus(path)
+    const req = getGitBranchInfo(path)
       .then((s) => ({
         isRepo: !!s.isRepo,
         branch: s.isRepo ? (s.branch ?? null) : null,
@@ -75,6 +78,8 @@ function probe(path: string, fresh = false): Promise<GitBranchInfo> {
     inflight.set(path, req);
     void req.then((info) => {
       if (inflight.get(path) === req) inflight.delete(path);
+      const repeat = pendingRefresh.delete(path) && !!tracked.get(path)?.liveListeners.size;
+      if (repeat) { void probe(path); return; }
       if (seq.get(path) !== n) return;
       const prev = cache.get(path);
       cache.set(path, info);
@@ -100,15 +105,15 @@ function startShared(): void {
   if (stopShared) return;
   let pending = new Set<string>();
   let debounce: ReturnType<typeof setTimeout> | null = null;
-  const unlisten = onFsChanged(({ root, git }) => {
-    if (!git || document.hidden) return;
-    for (const [path, entry] of tracked) if (entry.root === root) pending.add(path);
+  const unlisten = onFsChanged(({ root, branch }) => {
+    if (!branch || document.hidden) return;
+    for (const [path, entry] of tracked) if (entry.liveListeners.size && entry.root === root) pending.add(path);
     if (debounce || !pending.size) return;
     debounce = setTimeout(() => {
       debounce = null;
       const paths = pending;
       pending = new Set();
-      for (const path of paths) if (tracked.has(path)) void probe(path, true);
+      for (const path of paths) if (tracked.get(path)?.liveListeners.size) void probe(path, true);
     }, EVENT_DEBOUNCE_MS);
   });
   // Watched repositories only need their lease renewed. Unwatched ones, and linked worktrees whose HEAD
@@ -116,6 +121,7 @@ function startShared(): void {
   const timer = setInterval(() => {
     if (document.hidden) return;
     for (const [path, entry] of tracked) {
+      if (!entry.liveListeners.size) continue;
       if (entry.root) renewWatch(path, entry);
       const info = cache.get(path);
       if (info?.isRepo && (!entry.root || info.isWorktree)) void probe(path, true);
@@ -123,7 +129,7 @@ function startShared(): void {
   }, RENEW_MS);
   const recheckAll = () => {
     if (document.hidden) return;
-    for (const path of tracked.keys()) void probe(path, true);
+    for (const [path, entry] of tracked) if (entry.liveListeners.size) void probe(path, true);
   };
   window.addEventListener("focus", recheckAll);
   document.addEventListener("visibilitychange", recheckAll);
@@ -137,21 +143,26 @@ function startShared(): void {
 }
 
 /** Keep a path's cache live while a listener displays it; returns the matching release. */
-function track(path: string, listener: Listener): () => void {
+function track(path: string, listener: Listener, live: boolean): () => void {
   let entry = tracked.get(path);
   if (!entry) {
-    entry = { listeners: new Set(), root: null };
+    entry = { listeners: new Set(), liveListeners: new Set(), root: null };
     tracked.set(path, entry);
-    renewWatch(path, entry);
   }
   entry.listeners.add(listener);
-  startShared();
+  if (live) {
+    entry.liveListeners.add(listener);
+    if (entry.liveListeners.size === 1) renewWatch(path, entry);
+    startShared();
+  }
   const own = entry;
   return () => {
     own.listeners.delete(listener);
-    if (own.listeners.size || tracked.get(path) !== own) return;
-    tracked.delete(path);
-    if (!tracked.size && stopShared) {
+    own.liveListeners.delete(listener);
+    if (tracked.get(path) !== own) return;
+    if (!own.liveListeners.size) own.root = null;
+    if (!own.listeners.size) tracked.delete(path);
+    if (![...tracked.values()].some((e) => e.liveListeners.size) && stopShared) {
       stopShared();
       stopShared = null;
     }
@@ -188,8 +199,8 @@ export function isWorktreeGone(worktreePath?: string | null): boolean {
   return !info.isRepo;
 }
 
-/** Get cached/deduplicated branch and worktree information for a directory, kept current while mounted. */
-export function useGitBranchInfo(path?: string | null): GitBranchInfo {
+/** Live labels watch for changes; passive sidebar consumers only populate/read the shared cache. */
+export function useGitBranchInfo(path?: string | null, live = true): GitBranchInfo {
   const [info, setInfo] = useState<GitBranchInfo>(() =>
     path && cache.has(path) ? cache.get(path)! : EMPTY,
   );
@@ -201,17 +212,17 @@ export function useGitBranchInfo(path?: string | null): GitBranchInfo {
     }
     // Updates arrive through the listener, including the first probe's answer, so a superseded probe
     // never reaches the component.
-    const release = track(path, setInfo);
+    const release = track(path, setInfo, live);
     const cached = cache.get(path);
     if (cached) setInfo(cached);
-    else void probe(path);
+    if (!cached || live) void probe(path);
     return release;
-  }, [path]);
+  }, [path, live]);
 
   return info;
 }
 
 /** Get only the branch name for compatibility with legacy callers. */
-export function useGitBranch(path?: string | null): string | null {
-  return useGitBranchInfo(path).branch;
+export function useGitBranch(path?: string | null, live = true): string | null {
+  return useGitBranchInfo(path, live).branch;
 }

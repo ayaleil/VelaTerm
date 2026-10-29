@@ -64,7 +64,6 @@ vi.mock("../ipc/commands", () => ({
   listShells: vi.fn(() => Promise.resolve([])),
   ptyKill: vi.fn(() => Promise.resolve()),
   removeWorktree: vi.fn(),
-  worktreesInSubtree: vi.fn(() => Promise.resolve([])),
 }));
 vi.mock("../ipc/info", () => ({ copyText: vi.fn(), openDir: vi.fn() }));
 vi.mock("../ipc/chat", () => ({ chatStop: vi.fn(() => Promise.resolve()) }));
@@ -125,6 +124,18 @@ describe("ending a session process", () => {
     view.rerender(result.current.dialogs);
     expect(view.queryByRole("alertdialog")).toBeNull();
     view.unmount();
+  });
+
+  it.each([
+    [{ status: "idle", alive: true }, true],
+    [{ status: "running", alive: false }, false],
+    [{ status: "running" }, true],
+    [{ status: "idle" }, false],
+  ] as const)("offers Kill Process for runtime %o: %s", (runtime, offered) => {
+    testState.state.runtimes = { [node.id]: runtime };
+    const { result } = renderHook(() => useSessionMenu());
+    const labels = result.current.buildSessionItems(node).map(item => item.label);
+    expect(labels.includes("tree.killProcess")).toBe(offered);
   });
 
   it.each(["cancel", "escape"])("does not stop the process after %s", (method) => {

@@ -22,7 +22,7 @@ const translated: QuestionTranslation = { input: { questions: [{ ...input.questi
 beforeEach(() => {
   setLang("en"); vi.clearAllMocks(); mocks.translate.mockResolvedValue(translated);
   mocks.state = { sessionId: "fixture", originals: [], refresh: vi.fn(), save: vi.fn(),
-    settings: { config: { enabled: true, conversationKinds: ["claude"], engine: "google", agent: "", model: "", effort: "", serviceId: "", version: 1, generation: 1, enabledSince: 0 },
+    settings: { config: { enabled: true, defaultEnabled: true, conversationKinds: ["claude"], engine: "google", agent: "", model: "", effort: "", serviceId: "", version: 1, generation: 1, enabledSince: 0 },
       editable: true, conversationKinds: [], agents: [], services: [], languages: [], engines: ["google"], protocols: [], displays: ["original", "translation", "both", "immersive"] },
     value: { enabled: true, version: 1, generation: 1, preferences: { outgoing: true, replies: true, source: "auto", target: "en", replySource: "en", replyTarget: "zh-CN", display: "immersive", repliesSince: 0 },
       replies: [], messages: [], pending: [] } };

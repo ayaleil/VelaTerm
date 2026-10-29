@@ -15,8 +15,15 @@ function plural(n: number, one: string, few: string, many: string): string {
 const ru: typeof en = {
   "panel.averageOutput": "средняя скорость вывода",
   "panel.averageOutputHint": "Оценка количества выходных токенов в секунду за измеренное время ответа, включая сообщённые токены рассуждений. Время выполнения инструментов и ожидания пользователя не учитывается. Значение не отображается, если данные об использовании токенов нельзя надёжно сопоставить с измеренным временем. Это не скорость декодирования самой модели.",
+  "panel.turnStats": "Статистика хода",
+  "panel.fileCount": (n: number) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "файл" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "файла" : "файлов"}`,
+  "panel.showChangedFiles": "Показать файлы, изменённые за этот ход",
+  "panel.noFilesChanged": "За этот ход файлы не редактировались.",
+  "panel.shellEditsNotListed": "Изменения, сделанные командами оболочки, в список не попадают.",
   "translation.swap": "Поменять языки местами",
   "translation.openai": "Совместимый с OpenAI",
+  "translation.bing": "Bing Переводчик (без ключа API)",
+  "translation.bingHint": "Бесплатный перевод с помощью Bing. Ключ API и учётная запись Microsoft не требуются.",
   "translation.google": "Google Переводчик (без ключа API)",
   "translation.googleHint": "Бесплатный перевод с помощью Google. Ключ API и аккаунт Google не требуются.",
   "translation.rateLimited": "Слишком много запросов на перевод. Повторите попытку позже.",
@@ -25,6 +32,8 @@ const ru: typeof en = {
   "translation.title": "Перевод",
   "translation.enable": "Включить перевод",
   "translation.visibility": "Элементы управления переводом появляются в диалогах только при включении этой функции.",
+  "translation.defaultEnabled": "Включать перевод по умолчанию",
+  "translation.defaultEnabledHint": "Применяется к диалогам без сохранённых настроек перевода. Изменения сохраняются автоматически.",
   "translation.conversationKinds": "Типы агентов для диалогов",
   "translation.conversationKindsHint": "Элементы управления переводом и автоматический перевод доступны только в диалогах с агентами выбранных типов. Изменения сохраняются автоматически.",
   "translation.chooseConversationKinds": "Выберите типы агентов",
@@ -303,6 +312,8 @@ const ru: typeof en = {
   "memory.collections": "Архивные сессии",
   "memory.collectionConversation": "Диалог",
   "memory.collectionEmptyEntries": "В этом диалоге пока нет статей базы знаний.",
+  "memory.collapseAllProjects": "Свернуть все проекты",
+  "memory.expandAllProjects": "Развернуть все проекты",
   "memory.title": "База знаний",
   "memory.add": "Добавить в базу знаний",
   "memory.intro": "Упорядочивайте знания по проектам и сеансам. Сохранённые статьи не зависят от изменений источников и доступны для ручного редактирования.",
@@ -893,6 +904,7 @@ const ru: typeof en = {
   "settings.scSplitDown": "Разделить вниз", // Split down
   "settings.scSearch": "Поиск в терминале", // Find in terminal
   "settings.scGlobalSearch": "Поиск по всем сеансам", // Search all sessions
+  "settings.scCopyTerminal": "Копировать выделение в терминале", // Copy terminal selection
   "settings.scSelectAllTerminal": "Выделить всё в терминале", // Select all in terminal
   "settings.scSaveDoc": "Сохранить документ", // Save document
   "settings.scRecording": "Нажмите клавиши…", // Press keys…
@@ -996,6 +1008,7 @@ const ru: typeof en = {
   "connect.portPlaceholder": "Порт", // Port
   "connect.connecting": "Подключение…", // Connecting…
   "connect.connect": "Подключиться", // Connect
+  "connect.stop": "Остановить",
   "connect.stagePreparing": "Подготовка сервера…",
   "connect.stageTransferring": "Передача сервера…",
   "connect.stageStarting": "Запуск сервера…",
@@ -1261,8 +1274,6 @@ const ru: typeof en = {
     `Удалить группу «${name}»? Все её подгруппы и сессии тоже будут удалены. Это действие необратимо.`, // Delete group "{name}"?…
   "tree.deleteSessionBody": (name) =>
     `Удалить сессию «${name}» (и все её дочерние сессии)? Это действие необратимо.`, // Delete session "{name}"…
-  "tree.deleteWorktrees": (n) =>
-    `Также удалить связанные git worktree (всего ${n}; удаление может не сработать, если в рабочем дереве есть изменения)`, // Also remove associated git worktrees…
 
   // Session information dialog
   "info.name": "Название", // Name
@@ -1311,7 +1322,7 @@ const ru: typeof en = {
     "У этого проекта нет пригодного пути к git-репозиторию.", // This project has no usable git repository path.
   // ── Worktree selector for custom session creation ──
   "worktreeSel.label": "Worktree",
-  "worktreeSel.modeNone": "Без", // None
+  "worktreeSel.modeNone": "Нет", // None
   "worktreeSel.modeNew": "Новый", // New
   "worktreeSel.modeExisting": "Существующий", // Existing
   "worktreeSel.loading": "Загрузка worktree…", // Loading worktrees…
@@ -1357,6 +1368,7 @@ const ru: typeof en = {
   "search.includeArchivedHint":
     "Искать также в архивных сессиях (по умолчанию выкл.)", // Also search archived sessions (off by default)
   "search.searching": "Поиск…", // Searching…
+  "search.progress": (sessions, bytes) => `Поиск… Проверено сессий: ${sessions} · Прочитано: ${bytes}`,
   "search.noResults": "Совпадений не найдено", // No matches found
   "search.sessionCount": (n) =>
     `${n} ${plural(n, "сессия", "сессии", "сессий")}`, // n sessions
@@ -1368,6 +1380,8 @@ const ru: typeof en = {
   "search.archivedBadge": "В архиве", // Archived
   "search.summary": (m, s) =>
     `${m} ${plural(m, "совпадение", "совпадения", "совпадений")} · ${s} ${plural(s, "сессия", "сессии", "сессий")}`, // X matches · N sessions
+  "search.pending": (n) =>
+    `Индексация ещё не завершена для ${n} ${plural(n, "сессии", "сессий", "сессий")}, поэтому результаты могут быть неполными.`, // N sessions are still being indexed, so results may be incomplete
   "search.matchPosition": (n, total) => `${n} из ${total}`, // N of M
   "search.roleTerminal": "Терминал", // Terminal
   "search.collapseGroup": "Свернуть", // Collapse
@@ -1769,7 +1783,6 @@ const ru: typeof en = {
   "mobile.inputOptions": "Параметры сообщения",
   "mobile.connections": "Управление подключениями",
   "mobile.more": "Другие действия",
-  "mobile.toDesktop": "Перейти к версии для ПК", // Switch to desktop
   "mobile.empty1": "Нет сеансов.", // No sessions.
   "mobile.noMatch": "Нет подходящих сеансов", // No matching sessions
   "mobile.empty2":
@@ -1777,6 +1790,10 @@ const ru: typeof en = {
   "mobile.back": "‹ Назад", // ‹ Back
   "mobile.selCopy": "Копировать", // Copy
   "mobile.selCancel": "Отмена", // Cancel
+  "mobile.compose": "Написать сообщение",
+  "mobile.composePlaceholder": "Введите сообщение для терминала",
+  "mobile.showTranscript": "Стенограмма",
+  "mobile.showTerminal": "Терминал",
 
   // ── Mobile connection client (apps/mobile start page) ──
   "mobile.phaseConnecting": "Подключение по SSH…",
@@ -1975,6 +1992,7 @@ const ru: typeof en = {
   "skills.vspawn": "Создаёт дочернюю сессию для выполнения задачи.",
   "skills.vspawnTree": "Создаёт дочернюю сессию с собственным рабочим деревом.",
   "skills.vopen": "Открывает файл или веб-страницу в VelaTerm.",
+  "skills.vartifact": "Показывает визуальный результат как HTML-страницу с автообновлением рядом с сессией.", // Show visual work as a live HTML page beside the conversation.
   "skills.vrefer": "Читает диалог другой сессии.",
   "skills.vask": "Задаёт вопрос о другой сессии и возвращает краткий ответ.",
   "skills.vsearch": "Ищет по диалогам всех сессий.",
@@ -1993,6 +2011,7 @@ const ru: typeof en = {
   "session.showTerminal": "Вид терминала",
   "session.switchTitle": "Смена вида перезапускает агента",
   "session.switchBody": "Текущий ход будет прерван. Разговор сохранится.",
+  "session.switchBodyBackground": "Фоновые задачи, запущенные агентом, могут остановиться, и агент не узнает об их завершении. Разговор сохранится.",
   "session.switchConfirm": "Переключить",
   "session.terminalViewHint": "Нажмите здесь, чтобы вернуться к виду терминала.",
   "session.loading": "Читаем беседу…",
@@ -2141,6 +2160,7 @@ const ru: typeof en = {
   "chat.compaction.manual": "Контекст сжат",
   "chat.compaction.auto": "Контекст сжат автоматически",
   "chat.compaction.from": (tokens: string) => `было ${tokens} токенов`,
+  "chat.wake.label": "Фоновая задача завершена",
   // N steps
   "chat.subagent.steps": (n: number) => {
     const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
@@ -2456,6 +2476,76 @@ const ru: typeof en = {
   "ports.limit": (max) => `Для одного подключения можно перенаправить не более ${max} портов`, // At most {max} ports can be forwarded per connection
   "ports.notForwarded": (port) => `Порт ${port} не перенаправлен`, // Port {port} is not forwarded
   "statusbar.ports": (n) => `Перенаправлено портов: ${n}`, // {n} forwarded ports
+  "chat.history.imageDownloadRequired": "Это изображение нельзя открыть здесь. Скачайте оригинал, чтобы просмотреть его.",
+  "chat.history.readBody": "Прочитать полностью",
+  "chat.history.selectDetail": "Выберите файл или поле",
+  "chat.history.part": "Часть",
+  "chat.history.copyPart": "Копировать эту часть",
+
+  "chat.history.searchMore": "Другие результаты",
+  "chat.history.indexing": "Загрузка разговора…",
+  "chat.history.newer": "Загрузить более новые сообщения",
+
+  "chat.history.copyComplete": "Копировать полное содержимое",
+  "chat.history.downloadComplete": "Скачать полное содержимое",
+  "chat.history.unavailable": "Подробные данные истории этой сессии недоступны.",
+  "chat.history.openViewer": "Откройте подробный просмотр, чтобы прочитать полное содержимое.",
+  "chat.history.copyBusy": "Копирование полного содержимого уже выполняется.",
+  "chat.history.clipboardLimit": "Содержимое превышает лимит буфера обмена. Скачайте файл целиком.",
+  "chat.history.contentChanged": "Содержимое изменилось во время передачи. Загрузите его заново.",
+  "export.preparing": "Подготовка экспорта сеанса…",
+  "chat.history.windowLimit": "Это сообщение превышает предел отображения. Загрузите полный текст для чтения или скачайте его в виде файла.",
+
+  "chat.history.incomplete": "Разговор ещё не загрузился полностью. Повторите попытку чуть позже.",
+  "chat.history.indexBusy": "Индекс истории используется другим процессом. Повторите попытку через некоторое время.",
+  "chat.history.unsupported": "Формат некоторых записей истории не поддерживается. Их исходное содержимое сохранено.",
+  "chat.history.canceled": "Чтение истории отменено.",
+  "chat.history.pagedRequired": "Откройте это содержимое в постраничной истории или в просмотрщике подробностей.",
+  "chat.history.sourceMissing": "Источник истории отсутствует или недоступен.",
+  "chat.history.updateServer": "Обновите сервер, чтобы безопасно загружать историю разговоров.",
+  "chat.history.storagePressure": "Хранилище истории заполнено или недоступно. Освободите место и повторите попытку. Управление агентом остаётся доступным.",
+
+  "artifact.preview": "Просмотр", // Preview
+  "artifact.source": "Исходный код", // Source
+  "artifact.split": "Рядом", // Split
+  "artifact.live": "Автообновление", // Live
+  "artifact.liveTitle": "Перезагружается автоматически при изменении файла", // Reloads automatically when the file changes
+  "artifact.offline": "Офлайн", // Offline
+  "artifact.offlineTitle": "Эта страница не может ничего загружать из интернета. Нажмите, чтобы разрешить для этого файла.", // This page cannot load anything from the internet. Click to allow it for this file.
+  "artifact.online": "Онлайн", // Online
+  "artifact.onlineTitle": "Эта страница может загружать файлы из интернета. Нажмите, чтобы снова заблокировать.", // This page can load files from the internet. Click to block them again.
+  "artifact.netBlocked": (n: number) => `Страница пыталась загрузить файлы из интернета (${n}). Они заблокированы.`, // This page tried to load ${n} files from the internet. They were blocked.
+  "artifact.allowForFile": "Разрешить для этого файла", // Allow for this file
+  "artifact.errorCount": (n: number) => `Ошибок: ${n}`, // ${n} errors
+  "artifact.warningCount": (n: number) => `Предупреждений: ${n}`, // ${n} warnings
+  "artifact.console": "Консоль", // Console
+  "artifact.consoleEmpty": "Нет ошибок и предупреждений.", // No errors or warnings.
+  "artifact.clearConsole": "Очистить", // Clear
+  "artifact.closeConsole": "Закрыть консоль", // Close console
+  "artifact.sendToSession": "Отправить в сессию", // Send to session
+  "artifact.sendToSessionTitle": "Вставляет эти ошибки в поле ввода сессии, которая создала эту страницу", // Put these errors in the message box of the session that wrote this page
+  "artifact.fileGone": "Этот файл больше недоступен", // This file is no longer available
+  "artifact.fileGoneBody": (name: string) => `Файл ${name} перемещён или удалён. Откройте его снова из нового места или закройте эту вкладку.`, // ${name} was moved or deleted. Open it again from its new location, or close this tab.
+  "artifact.reload": "Перезагрузить", // Reload
+  "artifact.openInBrowser": "Открыть в браузере", // Open in browser
+  "artifact.viewportFit": "По размеру вкладки", // Fit to tab
+  "artifact.viewportDesktop": "Компьютер", // Desktop
+  "artifact.viewportTablet": "Планшет", // Tablet
+  "artifact.viewportPhone": "Телефон", // Phone
+  "artifact.goToSession": "Перейти к сессии", // Go to session
+  "artifact.versionTitle": (n: number, time: string) => `Версия ${n} · ${time}`, // Version ${n} · ${time}
+  "artifact.viewingVersion": (n: number, time: string) => `Просмотр версии ${n} (сохранена: ${time})`, // Viewing version ${n}, saved ${time}
+  "artifact.restoreVersion": "Восстановить эту версию", // Restore this version
+  "artifact.backToLatest": "К последней версии", // Back to latest
+  "artifact.restoreBody": (n: number) => `Файл будет заменён версией ${n}. Текущее содержимое останется в истории версий.`, // The file will be replaced with version ${n}. Its current content stays in the version history.
+  "artifact.restore": "Восстановить", // Restore
+  "artifact.restoreFailed": "Не удалось восстановить версию. Попробуйте ещё раз.", // The version could not be restored. Please try again.
+  "artifact.openAsTab": "Открыть во вкладке", // Open as tab
+  "artifact.closePanel": "Закрыть просмотр", // Close preview
+  "artifact.cardOpen": "Открыть", // Open
+  "artifact.cardOpenTitle": "Открыть рядом с этой сессией", // Open beside this session
+  "artifact.cardKind": "HTML-страница", // HTML page
+  "artifact.frameTitle": (name: string) => `Просмотр: ${name}`, // Preview of ${name}
 };
 
 export default ru;

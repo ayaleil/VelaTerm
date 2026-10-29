@@ -38,6 +38,8 @@ import { startSpawnRecovery } from "./ipc/spawnRecovery";
 import { isShareSurface } from "./ipc/shareBase";
 import { isMobileView } from "./mobile/detect";
 import { useSharedSessionNavigation } from "./sharing/useSharedSessionNavigation";
+import { useHistorySessionNavigation } from "./layout/CenterPane/session/useHistorySessionNavigation";
+import { ExportProgressDialog } from "./ExportProgressDialog";
 import { wsClient } from "./ipc/wsClient";
 import { startUpdateSchedule } from "./ipc/updater";
 import { env, platform } from "./platform";
@@ -49,6 +51,7 @@ import { SaveAsModal } from "./remote/SaveAsModal";
 import { ProjectDialogRoutes } from "./remote/ProjectDialogRoutes";
 import { startMirrorSync } from "./store/mirrorSync";
 import { useTermStore } from "./store/termStore";
+import { isArtifactPath, noteArtifactWriter, openBesideSession } from "./layout/CenterPane/doc/artifact/artifactWriters";
 import { startUsageSync } from "./store/usageSync";
 import { watchSystemTheme } from "./theme";
 
@@ -94,6 +97,7 @@ function App() {
 
   useKeyboardShortcuts();
   useSharedSessionNavigation();
+  useHistorySessionNavigation();
 
   // Apply appearance, load the SQLite tree, and register global child-task listeners at startup.
   // Reapply appearance on system theme changes while following the system.
@@ -166,6 +170,12 @@ function App() {
         // The built-in browser requires a Tauri child or Electron WebContentsView, so only desktop opens it.
         if (isTauri || env.isElectron) useTermStore.getState().openBrowserTab(req.path);
         return;
+      }
+      // An HTML page opened from a conversation shows beside it, the way the agent's own reply presents it;
+      // anywhere else it opens as a tab.
+      if (isArtifactPath(req.path)) {
+        noteArtifactWriter(req.path, req.sessionId);
+        if (openBesideSession(req.sessionId, req.path)) return;
       }
       useTermStore.getState().openDocTab(req.path);
     });
@@ -292,6 +302,7 @@ function App() {
       <ConnectionBanner />
       <ErrorLogModal />
       <NotificationsManager />
+      {!isShareSurface && <ExportProgressDialog />}
       <GitbashDownloadBanner />
     </div>
   );

@@ -21,7 +21,6 @@ import {
   ptyKill,
   removeWorktree,
   type ShellOption,
-  worktreesInSubtree,
 } from "../ipc/commands";
 import { copyText, openDir } from "../ipc/info";
 import { createAgentPreset } from "../ipc/presets";
@@ -133,7 +132,7 @@ export type Dialog =
   | { type: "projectInfo"; id: string }
   // Binds an existing group to a worktree; sessions already in the group keep their own directory.
   | { type: "moveGroupWorktree"; groupId: string }
-  | { type: "confirmDelete"; node: TreeNodeRef; worktreePaths: string[] }
+  | { type: "confirmDelete"; node: TreeNodeRef }
   | { type: "confirmDeleteMany"; nodes: SelNode[] }
   | {
       // Delete Worktree lists repository worktrees; defaultPath preselects the triggering node's binding when present.
@@ -909,11 +908,7 @@ export function useSessionMenu(opts?: { groupNavigation?: boolean }): SessionMen
     const remove: MenuItem = {
       label: t("tree.deleteSession"),
       danger: true,
-      onClick: () => {
-        void worktreesInSubtree(node.id)
-          .then((paths) => setDialog({ type: "confirmDelete", node, worktreePaths: paths }))
-          .catch(() => setDialog({ type: "confirmDelete", node, worktreePaths: [] }));
-      },
+      onClick: () => setDialog({ type: "confirmDelete", node }),
     };
 
     const buildMoveTo = (): MenuItem => {
@@ -1091,8 +1086,11 @@ export function useSessionMenu(opts?: { groupNavigation?: boolean }): SessionMen
     }
     items.push(sep, buildMoveTo(), sep);
     // Chat processes live outside the PTY manager. Closing their pane only releases them when idle,
-    // so explicitly stop the owning engine before closing the view.
-    if (useTermStore.getState().runtimes[node.id]?.status === "running") {
+    // so explicitly stop the owning engine before closing the view. The backend's `alive` decides when it has
+    // reported one: `status` only knows about processes this client started, and a chat process that exits
+    // on its own never clears it.
+    const rt = useTermStore.getState().runtimes[node.id];
+    if (rt?.alive ?? rt?.status === "running") {
       items.push({
         label: t("tree.killProcess"),
         onClick: () => {
@@ -1474,15 +1472,10 @@ export function useSessionMenu(opts?: { groupNavigation?: boolean }): SessionMen
           collection={isVirtualProject(
             useTermStore.getState().projects.find((p) => p.id === dialog.node.id),
           )}
-          worktreePaths={dialog.worktreePaths}
           onCancel={() => setDialog(null)}
-          onConfirm={async (removeWt) => {
+          onConfirm={async () => {
             const { kind, id } = dialog.node;
-            const paths = dialog.worktreePaths;
             await deleteNode(kind, id);
-            if (removeWt) {
-              for (const p of paths) void removeWorktree(p, false).catch(() => {});
-            }
             setDialog(null);
           }}
         />

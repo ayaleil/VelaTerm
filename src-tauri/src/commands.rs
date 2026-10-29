@@ -1046,8 +1046,11 @@ pub async fn ssh_connect(
     remember: Option<bool>,
     shared_db: Option<bool>,
     mirror: Option<bool>,
+    connect_id: Option<String>,
     diagnostic_request_id: Option<String>,
 ) -> Result<String, String> {
+    // Registered before the blocking hop so a Stop click that arrives early is not lost.
+    let cancel = crate::connect_cancel::register(connect_id);
     // Data mode defaults to an isolated database; true reuses the remote desktop release database.
     let shared_db = shared_db.unwrap_or(false);
     // Mirror mode defaults off. On, the connection follows the remote desktop app: it attaches to the
@@ -1069,8 +1072,10 @@ pub async fn ssh_connect(
     let identifier_watch = identifier.clone();
     let host_bg = host.clone();
     let app_ev = app.clone();
+    let cancel_scope = cancel.handle();
     let r = tauri::async_runtime::spawn_blocking(move || {
         let _context=crate::diagnostics::Context::enter(diagnostic_request_id.as_deref());
+        let _cancel = cancel_scope.enter();
         // Emit stage code and percentage through ssh://progress for localized frontend display.
         let progress = move |stage: &str, pct: Option<u8>| {
             let _ = app_ev.emit(
@@ -1089,7 +1094,7 @@ pub async fn ssh_connect(
         // If key auth fails without a supplied password, retry once from the keyring. Otherwise
         // preserve AUTH_REQUIRED so the frontend can prompt manually.
         if let Err(e) = &res {
-            if password.is_none() && e.starts_with(crate::ssh_remote::AUTH_REQUIRED_TAG) {
+            if password.is_none() && e.starts_with(crate::ssh_remote::AUTH_REQUIRED_TAG) && crate::connect_cancel::check().is_ok() {
                 if let Some(pw) = crate::ssh_remote::load_password(&identifier, "ssh", &host_bg) {
                     // Adopt the remembered password only after success. On failure, keep AUTH_REQUIRED
                     // so a newly entered and remembered password can replace the stale one.
@@ -1119,6 +1124,17 @@ pub async fn ssh_connect(
     })
     .await
     .map_err(|e| format!("connect task failed: {e}"))??;
+
+    // Stopped after the remote side was already up: tear it down instead of opening a window. A service
+    // this connect just started has no sessions yet, so it is stopped too; a reused one is left running.
+    if cancel.is_cancelled() {
+        let (host_c, session_c, stop) = (host.clone(), r.session.clone(), !r.reused && !r.desktop_link);
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            crate::ssh_remote::disconnect(&host_c, &session_c, stop);
+        })
+        .await;
+        return Err(crate::connect_cancel::CANCELLED_TAG.to_string());
+    }
 
     // Record the successful host in most-recent-first connection history.
     {
@@ -1168,6 +1184,13 @@ pub async fn ssh_connect(
     Ok(session)
 }
 
+/// Stop an in-flight `ssh_connect` / `wsl_connect` started with the same `connect_id`. The flow stops at
+/// its next check and cleans up after itself. Synchronous: it only sets an in-memory flag.
+#[tauri::command]
+pub fn connect_cancel(connect_id: String) {
+    crate::connect_cancel::cancel(&connect_id);
+}
+
 /// Disconnect SSH. With kill_remote, stop the persistent remote service and all its sessions before
 /// closing forwarding/control; otherwise leave it running for reuse.
 #[tauri::command]
@@ -1185,12 +1208,16 @@ pub async fn wsl_connect(
     window: tauri::WebviewWindow,
     distribution: String,
     restart_existing: Option<bool>,
+    connect_id: Option<String>,
     diagnostic_request_id: Option<String>,
 ) -> Result<String, String> {
     if window.label() != "main" { return Err("WSL connections can only be opened from the main window".into()); }
+    let cancel = crate::connect_cancel::register(connect_id);
+    let cancel_scope = cancel.handle();
     let app_bg = app.clone();
     let connection = tauri::async_runtime::spawn_blocking(move || {
         let _context = crate::diagnostics::Context::enter(diagnostic_request_id.as_deref());
+        let _cancel = cancel_scope.enter();
         let mut span = crate::diagnostics::Span::new("wsl_connect", serde_json::json!({"command":"wsl_connect"}));
         let result = crate::wsl_remote::connect(&crate::host::AppCtx::Tauri(app_bg.clone()), &distribution, restart_existing.unwrap_or(false), &|stage, percent| {
             let _ = app_bg.emit_to("main", "wsl://progress", serde_json::json!({"stage":stage,"percent":percent}));
@@ -1198,6 +1225,12 @@ pub async fn wsl_connect(
         span.finish(&result);
         result
     }).await.map_err(|e| format!("WSL connection task failed: {e}"))??;
+    // Stopped after the service came up: release it (stopping it only if this connect created it).
+    if cancel.is_cancelled() {
+        let session = connection.session.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || crate::wsl_remote::connection_failed(&session)).await;
+        return Err(crate::connect_cancel::CANCELLED_TAG.to_string());
+    }
     let (port, password) = connection.address()?;
     // WebView2 creation must run from this async command, leaving the main event loop free.
     if let Err(error) = open_login_window(&app, &connection.distribution, &connection.session, port, &password, false, RemoteWindowKind::Wsl) {

@@ -158,8 +158,8 @@ export function KindIcon({ session, size = 14 }: { session: Session; size?: numb
  * 3. Otherwise probe Git at the session directory, falling back from a missing `cwd` to `rootPath`.
  *    This also covers worktrees opened directly as projects and therefore not recorded by VelaTerm.
  *
- * Only linked worktrees—not the primary working tree—receive a badge. `useGitBranchInfo` caches and
- * deduplicates by path, while sidebar virtualization limits probes to visible rows. The parent must
+ * Only linked worktrees—not the primary working tree—receive a badge. Metadata is cached by path;
+ * icons do not start watchers or polling, while sidebar virtualization limits initial probes. The parent must
  * use `position: relative` to anchor the badge (see `.wt-badge` in vlinx.css).
  */
 export function SessionKindIcon({
@@ -201,7 +201,7 @@ export function SessionKindIcon({
   }, [session.id, session.worktreePath, runtimeKey]);
   // A stored worktreePath is conclusive, so pass null to short-circuit the hook and avoid a Git probe.
   const probePath = session.worktreePath ? null : runtimeCwd || session.cwd || rootPath || null;
-  const git = useGitBranchInfo(probePath);
+  const git = useGitBranchInfo(probePath, false);
   const inWorktree = !!session.worktreePath || git.isWorktree;
   const wtPath = session.worktreePath || git.worktreePath;
   const wtDir = wtPath ? (wtPath.split("/").filter(Boolean).pop() ?? wtPath) : null;

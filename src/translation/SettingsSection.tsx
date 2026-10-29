@@ -33,6 +33,8 @@ export function TranslationSettingsSection() {
   const [draft, setDraft] = useState<TranslationConfig | null>(null);
   const dirty = useRef(false); const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  // Agent installations change outside the app and are not announced; read them again on open.
+  useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => { if (value && !dirty.current) setDraft(value.config); }, [value]);
   const edit = (patch: Partial<TranslationConfig>) => { dirty.current = true; setNote(""); setDraft(prev => prev ? { ...prev, ...patch } : null); };
   const run = async (action: () => Promise<unknown>, success = "") => {
@@ -43,12 +45,14 @@ export function TranslationSettingsSection() {
   const kinds = kindSelection.pending ?? value.config.conversationKinds;
   const selected = value.services.find(service => service.id === draft.serviceId);
   const agentSpec = value.agents.find(agent => agent.id === draft.agent);
-  const ready = draft.engine === "google" || (draft.engine === "api" ? !!selected : !!agentSpec?.available);
+  const ready = draft.engine === "google" || draft.engine === "bing" || (draft.engine === "api" ? !!selected : !!agentSpec?.available);
   return <section id="translation-settings" className="translation-section">
     <h3>{t("translation.title")}</h3>
     <div className="translation-card">
       <label className="translation-toggle"><span>{t("translation.enable")}</span><input type="checkbox" checked={value.config.enabled} disabled={busy} onChange={e => void run(() => invoke("translation_enable", { enabled: e.target.checked }))} /></label>
       <p className="translation-hint">{t("translation.visibility")}</p>
+      <label className="translation-toggle"><span>{t("translation.defaultEnabled")}</span><input type="checkbox" checked={value.config.defaultEnabled} disabled={busy} aria-describedby="translation-default-enabled-hint" onChange={e => void run(() => invoke("translation_set_default_enabled", { enabled: e.target.checked }))} /></label>
+      <p id="translation-default-enabled-hint" className="translation-hint">{t("translation.defaultEnabledHint")}</p>
       <Field as="div" label={t("translation.conversationKinds")} hint={t("translation.conversationKindsHint")}>
         <Select<SessionKind> multiple value={kinds} onChange={saveConversationKinds} width="100%" menuPortal
           options={value.conversationKinds.map(kind => ({ value: kind.id, label: kind.label, icon: <span aria-hidden="true" style={{ display: "inline-flex" }}>{kindIconEl(kind.id, 14)}</span> }))}
@@ -63,12 +67,12 @@ export function TranslationSettingsSection() {
     <div className="translation-card">
       <FieldStack>
         <Field as="div" label={t("translation.engine")}><Select value={draft.engine} width="100%" menuPortal disabled={busy || !value.editable} onChange={engine => edit({ engine })}
-          options={value.engines.map(engine => ({ value: engine, label: engine === "agent" ? t("orch.agentLabel") : t(engine === "google" ? "translation.google" : "translation.api") }))} ariaLabel={t("translation.engine")} /></Field>
+          options={value.engines.map(engine => ({ value: engine, label: engine === "agent" ? t("orch.agentLabel") : t(`translation.${engine}`) }))} ariaLabel={t("translation.engine")} /></Field>
         {draft.engine === "agent" ? <>
           <Field as="div" label={t("orch.agentLabel")}><AgentSelect value={draft.agent} options={value.agents} disabled={busy || !value.editable} onChange={agent => edit({ agent, model: "", effort: "" })} /></Field>
           {agentSpec && <ModelEffortFields key={agentSpec.id} spec={agentSpec} model={draft.model} effort={draft.effort}
             onChange={(model, effort) => edit({ model, effort })} disabled={busy || !value.editable} />}
-        </> : draft.engine === "google" ? <p className="translation-hint">{t("translation.googleHint")}</p> : <>
+        </> : draft.engine === "google" || draft.engine === "bing" ? <p className="translation-hint">{t(`translation.${draft.engine}Hint`)}</p> : <>
           <Field as="div" label={t("translation.service")}><Select value={draft.serviceId} width="100%" menuPortal disabled={busy || !value.editable} onChange={serviceId => edit({ serviceId })}
             options={value.services.map(service => ({ value: service.id, label: service.name }))} placeholder={t("translation.newService")} ariaLabel={t("translation.service")} /></Field>
           {selected && <><p className="translation-hint">{selected.baseUrl} · {selected.model}</p><p className="translation-hint">{t(selected.hasKey ? "translation.keyConfigured" : "translation.keyNotConfigured")}</p></>}

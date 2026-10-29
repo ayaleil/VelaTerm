@@ -346,6 +346,8 @@ pub fn download(url: &str, on_pct: &dyn Fn(u8)) -> Result<Vec<u8>, String> {
         last_pct = 0;
     }
     loop {
+        // A stopped connect abandons the download between chunks.
+        crate::connect_cancel::check()?;
         let n = reader
             .read(&mut chunk)
             .map_err(|e| format!("failed to read downloaded content: {e}"))?;

@@ -1183,6 +1183,32 @@ pub fn set_agent_session_id(
     Ok(n > 0)
 }
 
+/// Forget the agent conversation a session's terminal has just cleared (Claude `/clear`).
+///
+/// The agent starts a new conversation whose ID only arrives with the next prompt; until then the stored
+/// ID still names the cleared one, so the session view would replay it and a chat start would resume it.
+/// Unbind only when the cleared ID is the stored one, so a late callback cannot drop a conversation
+/// already captured after the clear. A pending fork has not captured its own ID yet, so its stored ID is
+/// the source conversation's and the clear always releases it.
+///
+/// Return whether data actually changed, like [`set_agent_session_id`].
+pub fn forget_agent_session_id(
+    conn: &Connection,
+    id: &str,
+    cleared_agent_session_id: &str,
+    kind: SessionKind,
+) -> Result<bool, String> {
+    let n = conn
+        .execute(
+            "UPDATE sessions SET agent_session_id = NULL, fork_pending = 0
+             WHERE id = ?2 AND kind = ?3 AND agent_session_id IS NOT NULL
+               AND (agent_session_id = ?1 OR fork_pending <> 0)",
+            params![cleared_agent_session_id, id, kind.as_str()],
+        )
+        .map_err(|e| format!("Failed to clear agent session id: {e}"))?;
+    Ok(n > 0)
+}
+
 /// Atomically claim a newly created agent session ID for a PTY session.
 ///
 /// Disk scanning narrows only by start time/cwd, so concurrent agents may see the same newest file.
@@ -2274,6 +2300,37 @@ fn creates_group_cycle(conn: &Connection, id: &str, target: &str) -> Result<bool
     Ok(true)
 }
 
+/// Re-parent a group and, when its project changes, re-home its whole subtree (nested groups and every
+/// session filed under them, archived ones included) to the target project.
+fn move_group_subtree(
+    conn: &Connection,
+    id: &str,
+    target_project_id: Option<&str>,
+    target_group_id: Option<&str>,
+    sort_order: i64,
+) -> Result<(), String> {
+    let source_project: Option<String> = conn
+        .query_row("SELECT project_id FROM groups WHERE id = ?1", params![id], |r| r.get(0))
+        .optional()
+        .map_err(|e| format!("Failed to read group: {e}"))?;
+    conn.execute(
+        "UPDATE groups SET project_id = ?1, parent_group_id = ?2, sort_order = ?3 WHERE id = ?4",
+        params![target_project_id, target_group_id, sort_order, id],
+    )
+    .map_err(|e| format!("Failed to move group: {e}"))?;
+    let Some(target) = target_project_id else { return Ok(()) };
+    if source_project.as_deref() == Some(target) {
+        return Ok(());
+    }
+    for gid in descendant_group_ids(conn, id)? {
+        conn.execute("UPDATE groups SET project_id = ?1 WHERE id = ?2", params![target, gid])
+            .map_err(|e| format!("Failed to move nested group: {e}"))?;
+        conn.execute("UPDATE sessions SET project_id = ?1 WHERE group_id = ?2", params![target, gid])
+            .map_err(|e| format!("Failed to move grouped sessions: {e}"))?;
+    }
+    Ok(())
+}
+
 /// Move a node to a new parent and sort position; projects support reordering only.
 pub fn move_node(
     conn: &Connection,
@@ -2293,11 +2350,15 @@ pub fn move_node(
                     return Err("Cannot move a group into itself or its own subtree".into());
                 }
             }
-            conn.execute(
-                "UPDATE groups SET project_id = ?1, parent_group_id = ?2, sort_order = ?3 WHERE id = ?4",
-                params![target_project_id, target_group_id, sort_order, id],
-            )
-            .map_err(|e| format!("Failed to move group: {e}"))?;
+            // A session launches in its own project's root, so a cross-project move must carry every nested
+            // group and session along; otherwise they would sit under the new project but still start in the
+            // old one. A savepoint keeps this atomic even when the caller already holds a transaction.
+            conn.execute_batch("SAVEPOINT move_group")
+                .map_err(|e| format!("Failed to begin group move: {e}"))?;
+            let moved = move_group_subtree(conn, id, target_project_id, target_group_id, sort_order);
+            let end = if moved.is_ok() { "RELEASE move_group" } else { "ROLLBACK TO move_group; RELEASE move_group" };
+            conn.execute_batch(end).map_err(|e| format!("Failed to finish group move: {e}"))?;
+            moved?;
         }
         NodeKind::Session => {
             // Same cycle guard as groups: `move_node` is reachable over the WebSocket dispatch, where no
@@ -2452,6 +2513,18 @@ pub fn list_archived(conn: &Connection) -> Result<Vec<Session>, String> {
                      SELECT 1 FROM sessions p
                      WHERE p.id = s.parent_session_id AND p.archived_at IS NOT NULL))
              ORDER BY s.archived_at DESC"
+        ),
+        map_session,
+    )
+}
+
+/// List every archived session, descendants included, for the knowledge-base Collections tree,
+/// which nests archived children under their archived parent instead of hiding them.
+pub fn list_archived_all(conn: &Connection) -> Result<Vec<Session>, String> {
+    query_all(
+        conn,
+        &format!(
+            "SELECT {SESSION_COLUMNS} FROM sessions WHERE archived_at IS NOT NULL ORDER BY archived_at DESC"
         ),
         map_session,
     )
@@ -2983,6 +3056,45 @@ mod tests {
         assert!(move_node(&conn, NodeKind::Group, "g2", Some("p1"), None, None, 0).is_ok());
     }
 
+    /// Sessions launch in their own project's root, so moving a group out of a collection into a project must
+    /// re-home every nested group and session; nodes outside the subtree stay put.
+    #[test]
+    fn move_node_carries_group_subtree_across_projects() {
+        let conn = mem_conn();
+        conn.execute_batch(
+            "INSERT INTO projects (id, name, root_path, sort_order, created_at) VALUES
+               ('c', 'collection', '', 0, 0), ('p', 'project', '/work/p', 0, 0);
+             INSERT INTO groups (id, project_id, name, sort_order, parent_group_id, created_at) VALUES
+               ('g1', 'c', 'g1', 0, NULL, 0), ('g2', 'c', 'g2', 0, 'g1', 0), ('other', 'c', 'other', 0, NULL, 0);
+             INSERT INTO sessions (id, project_id, group_id, name, kind, sort_order, parent_session_id, created_at) VALUES
+               ('s1', 'c', 'g1', 's1', 'terminal', 0, NULL, 0),
+               ('s1c', 'c', 'g1', 's1c', 'terminal', 0, 's1', 0),
+               ('s2', 'c', 'g2', 's2', 'terminal', 0, NULL, 0),
+               ('s3', 'c', 'other', 's3', 'terminal', 0, NULL, 0);",
+        )
+        .unwrap();
+
+        move_node(&conn, NodeKind::Group, "g1", Some("p"), None, None, 5).unwrap();
+
+        let project_of = |table: &str, id: &str| -> String {
+            conn.query_row(&format!("SELECT project_id FROM {table} WHERE id = ?1"), params![id], |r| r.get(0))
+                .unwrap()
+        };
+        for g in ["g1", "g2"] {
+            assert_eq!(project_of("groups", g), "p", "group {g}");
+        }
+        for s in ["s1", "s1c", "s2"] {
+            assert_eq!(project_of("sessions", s), "p", "session {s}");
+        }
+        assert_eq!(project_of("groups", "other"), "c");
+        assert_eq!(project_of("sessions", "s3"), "c");
+        // Nesting inside the moved subtree is preserved.
+        let parent: Option<String> = conn
+            .query_row("SELECT parent_group_id FROM groups WHERE id = 'g2'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(parent.as_deref(), Some("g1"));
+    }
+
     #[test]
     fn windows_verbatim_paths_are_normalized_for_display_and_launch() {
         assert_eq!(
@@ -3403,6 +3515,51 @@ mod tests {
 
         // A missing session returns None without error.
         assert_eq!(get_agent_session_id(&conn, "nope").unwrap(), None);
+    }
+
+    /// A terminal `/clear` unbinds only the conversation it cleared, and always releases a pending fork.
+    #[test]
+    fn forget_agent_session_id_unbinds_only_the_cleared_conversation() {
+        let conn = mem_conn();
+        let project = import_project(&conn, std::env::temp_dir().to_str().unwrap()).unwrap();
+        let claude = create_session(
+            &conn,
+            &project.id,
+            None,
+            "c",
+            SessionKind::Claude,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        set_agent_session_id(&conn, &claude.id, "before-clear", SessionKind::Claude).unwrap();
+
+        // A late callback for an older conversation, or one from another agent kind, changes nothing.
+        assert!(!forget_agent_session_id(&conn, &claude.id, "older", SessionKind::Claude).unwrap());
+        assert!(!forget_agent_session_id(&conn, &claude.id, "before-clear", SessionKind::Codex).unwrap());
+        assert_eq!(
+            get_agent_session_id(&conn, &claude.id).unwrap().as_deref(),
+            Some("before-clear")
+        );
+
+        assert!(forget_agent_session_id(&conn, &claude.id, "before-clear", SessionKind::Claude).unwrap());
+        assert_eq!(get_agent_session_id(&conn, &claude.id).unwrap(), None);
+        // Repeating the clear reports no change and triggers no broadcast.
+        assert!(!forget_agent_session_id(&conn, &claude.id, "before-clear", SessionKind::Claude).unwrap());
+
+        // A fork still anchored to its source releases it even though the cleared ID is the fork's own.
+        set_agent_session_id(&conn, &claude.id, "source", SessionKind::Claude).unwrap();
+        let fork = fork_session(&conn, &claude.id).unwrap();
+        assert!(forget_agent_session_id(&conn, &fork.id, "fork-own", SessionKind::Claude).unwrap());
+        assert_eq!(get_agent_session_id(&conn, &fork.id).unwrap(), None);
+        assert!(!get_fork_pending(&conn, &fork.id).unwrap());
+        assert_eq!(
+            get_agent_session_id(&conn, &claude.id).unwrap().as_deref(),
+            Some("source")
+        );
     }
 
     #[test]
