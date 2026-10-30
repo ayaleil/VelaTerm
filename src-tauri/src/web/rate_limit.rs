@@ -4,8 +4,9 @@
 //! without credentials, so they form a DoS-amplification primitive: each request costs the server a
 //! memory-hard hash. Two independent brakes contain that:
 //!
-//! - [`LoginRateLimiter`]: a per-IP fixed window of login attempts. A blocked IP is rejected before any
-//!   Argon2 work happens. The limiter is in-memory by design — a restart resets it, which is acceptable
+//! - [`LoginRateLimiter`]: a per-client fixed window of login attempts, keyed by peer IP or, behind
+//!   Cloudflare Access, by the verified Access identity (see [`LimitKey`]). A blocked client is rejected
+//!   before any Argon2 work happens. The limiter is in-memory by design — a restart resets it, which is acceptable
 //!   because the pairing token plus Argon2 remain as the actual credential barrier. One limiter is
 //!   shared per data directory across every in-process server instance (see [`LoginRateLimiter::shared`],
 //!   the `PAIRING_STORES` pattern from auth.rs), so a dual-instance `--serve` setup no longer doubles an
@@ -37,10 +38,24 @@ const WINDOW: Duration = Duration::from_secs(60);
 /// with memory-hard hashing.
 pub static VERIFY_SEMAPHORE: Semaphore = Semaphore::const_new(2);
 
-/// Per-IP login-attempt window. All mutating accesses prune expired entries so the map cannot grow
+/// Who a login attempt is counted against. Behind a Cloudflare tunnel every peer is 127.0.0.1, so that
+/// instance keys on the identity from the already-verified Access JWT instead of the peer address.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LimitKey {
+    Ip(IpAddr),
+    Identity(String),
+}
+
+impl From<IpAddr> for LimitKey {
+    fn from(ip: IpAddr) -> Self {
+        LimitKey::Ip(ip)
+    }
+}
+
+/// Per-client login-attempt window. All mutating accesses prune expired entries so the map cannot grow
 /// unboundedly under a spread of source addresses.
 pub struct LoginRateLimiter {
-    entries: Mutex<HashMap<IpAddr, WindowEntry>>,
+    entries: Mutex<HashMap<LimitKey, WindowEntry>>,
 }
 
 struct WindowEntry {
@@ -91,11 +106,12 @@ impl LoginRateLimiter {
     /// immediately and hands it back as an RAII [`AttemptGuard`]: resolve it with
     /// [`AttemptGuard::failure`] or [`AttemptGuard::success`]; merely dropping it releases the
     /// reservation at once instead of leaking it until the window prune.
-    pub fn allow(self: &Arc<Self>, ip: IpAddr) -> Option<AttemptGuard> {
-        if self.allow_at(ip, Instant::now()) {
+    pub fn allow(self: &Arc<Self>, key: impl Into<LimitKey>) -> Option<AttemptGuard> {
+        let key = key.into();
+        if self.allow_at(key.clone(), Instant::now()) {
             Some(AttemptGuard {
                 limiter: Arc::clone(self),
-                ip,
+                key,
                 resolved: false,
             })
         } else {
@@ -104,8 +120,8 @@ impl LoginRateLimiter {
     }
 
     /// Record a failed login attempt for this IP, converting its pending reservation into a failure.
-    fn record_failure(&self, ip: IpAddr) {
-        self.record_failure_at(ip, Instant::now());
+    fn record_failure(&self, key: LimitKey) {
+        self.record_failure_at(key, Instant::now());
     }
 
     /// Release one pending reservation for this IP without recording a failure — used by a successful
@@ -113,15 +129,15 @@ impl LoginRateLimiter {
     /// counter or other requests' reservations, because behind a shared NAT one legitimate success
     /// must not refresh an attacker's budget (the old whole-entry removal did exactly that). A
     /// legitimate user who mistyped keeps the recorded failures until the 60s window expires.
-    fn release_pending(&self, ip: IpAddr) {
-        self.release_pending_at(ip, Instant::now());
+    fn release_pending(&self, key: &LimitKey) {
+        self.release_pending_at(key, Instant::now());
     }
 
     /// Time-injectable core of [`allow`], used by tests to step through window expiry.
-    fn allow_at(&self, ip: IpAddr, now: Instant) -> bool {
+    fn allow_at(&self, key: LimitKey, now: Instant) -> bool {
         let mut entries = self.entries.lock().unwrap();
         prune(&mut entries, now);
-        let e = entries.entry(ip).or_insert(WindowEntry {
+        let e = entries.entry(key).or_insert(WindowEntry {
             window_start: now,
             failures: 0,
             pending: 0,
@@ -134,10 +150,10 @@ impl LoginRateLimiter {
     }
 
     /// Time-injectable core of [`record_failure`].
-    fn record_failure_at(&self, ip: IpAddr, now: Instant) {
+    fn record_failure_at(&self, key: LimitKey, now: Instant) {
         let mut entries = self.entries.lock().unwrap();
         prune(&mut entries, now);
-        let e = entries.entry(ip).or_insert(WindowEntry {
+        let e = entries.entry(key).or_insert(WindowEntry {
             window_start: now,
             failures: 0,
             pending: 0,
@@ -148,10 +164,10 @@ impl LoginRateLimiter {
 
     /// Time-injectable core of [`release_pending`]. An entry whose window already expired was pruned
     /// together with its reservations, so a missing entry is a valid no-op.
-    fn release_pending_at(&self, ip: IpAddr, now: Instant) {
+    fn release_pending_at(&self, key: &LimitKey, now: Instant) {
         let mut entries = self.entries.lock().unwrap();
         prune(&mut entries, now);
-        if let Some(e) = entries.get_mut(&ip) {
+        if let Some(e) = entries.get_mut(key) {
             e.pending = e.pending.saturating_sub(1);
         }
     }
@@ -166,7 +182,7 @@ impl LoginRateLimiter {
 /// [`success`]: AttemptGuard::success
 pub struct AttemptGuard {
     limiter: Arc<LoginRateLimiter>,
-    ip: IpAddr,
+    key: LimitKey,
     resolved: bool,
 }
 
@@ -174,20 +190,20 @@ impl AttemptGuard {
     /// Convert the reservation into a recorded failure.
     pub fn failure(mut self) {
         self.resolved = true;
-        self.limiter.record_failure(self.ip);
+        self.limiter.record_failure(self.key.clone());
     }
 
     /// Release the reservation after a successful login without touching recorded failures.
     pub fn success(mut self) {
         self.resolved = true;
-        self.limiter.release_pending(self.ip);
+        self.limiter.release_pending(&self.key);
     }
 }
 
 impl Drop for AttemptGuard {
     fn drop(&mut self) {
         if !self.resolved {
-            self.limiter.release_pending(self.ip);
+            self.limiter.release_pending(&self.key);
         }
     }
 }
@@ -199,7 +215,7 @@ impl Default for LoginRateLimiter {
 }
 
 /// Drop entries whose window has expired; called on every access so memory stays bounded.
-fn prune(entries: &mut HashMap<IpAddr, WindowEntry>, now: Instant) {
+fn prune(entries: &mut HashMap<LimitKey, WindowEntry>, now: Instant) {
     entries.retain(|_, e| now.duration_since(e.window_start) < WINDOW);
 }
 
@@ -208,8 +224,8 @@ mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};
 
-    fn ip(last: u8) -> IpAddr {
-        IpAddr::V4(Ipv4Addr::new(127, 0, 0, last))
+    fn ip(last: u8) -> LimitKey {
+        LimitKey::Ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, last)))
     }
 
     #[test]
@@ -254,6 +270,21 @@ mod tests {
         }
         assert!(!l.allow_at(ip(1), t0));
         assert!(l.allow_at(ip(2), t0), "another IP must not inherit the block");
+    }
+
+    /// Behind a tunnel every peer shares 127.0.0.1; identity keys keep one user's failures from locking out
+    /// another, and from blocking the bare loopback address.
+    #[test]
+    fn identities_are_independent_of_each_other_and_of_ips() {
+        let l = LoginRateLimiter::new();
+        let t0 = Instant::now();
+        let alice = LimitKey::Identity("alice@example.com".into());
+        for _ in 0..MAX_FAILURES {
+            l.record_failure_at(alice.clone(), t0);
+        }
+        assert!(!l.allow_at(alice, t0));
+        assert!(l.allow_at(LimitKey::Identity("bob@example.com".into()), t0));
+        assert!(l.allow_at(ip(1), t0));
     }
 
     #[test]

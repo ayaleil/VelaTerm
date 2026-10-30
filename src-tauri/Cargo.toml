@@ -169,6 +169,9 @@ zip = { version = "4", default-features = false, features = ["deflate"] }
 # Chinese word segmentation for the word-level search index (search/tokenize.rs). The bundled default
 # dictionary is embedded compressed; no runtime download or external service is involved.
 jieba-rs = "0.10.3"
+# RS256 verification of Cloudflare Access JWTs (web/cloudflare_access.rs). 10.3+ fixes GHSA-h395-gr6q-cpjc;
+# aws-lc-rs is the crypto backend rustls already links.
+jsonwebtoken = { version = "10.4", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 
 # Unix-only rlimit support raises open-file soft limits for inherited agent sessions, avoiding macOS's
 # default 256-descriptor failures. Windows has no equivalent.
@@ -238,3 +241,9 @@ objc2-user-notifications = { version = "0.3", features = [
     "UNNotificationTrigger",
     "UNNotificationSettings",
 ] }
+
+[dev-dependencies]
+# Generates throwaway RSA keys for the Cloudflare Access JWT tests; already linked through rustls.
+aws-lc-rs = "1"
+# Drives the Cloudflare Access gate through a router with `ServiceExt::oneshot`; already linked through axum.
+tower = { version = "0.5", features = ["util"] }

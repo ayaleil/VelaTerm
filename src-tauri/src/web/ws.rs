@@ -21,6 +21,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, RawQuery, State};
+use axum::Extension;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use futures_util::stream::{SplitSink, SplitStream};
@@ -29,7 +30,9 @@ use serde_json::{json, Value};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use super::outbound;
 
+use super::cloudflare_access::{login_limit_key, AccessIdentity};
 use super::dispatch::{dispatch, CallOrigin};
+use super::rate_limit::LimitKey;
 use super::e2ee::{self, Cipher};
 use super::{Ctx, ServeMode};
 use crate::db::repo;
@@ -46,9 +49,11 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(ctx): State<Ctx>,
     ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
+    identity: Option<Extension<AccessIdentity>>,
     RawQuery(query): RawQuery,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    let limit_key = login_limit_key(addr.ip(), identity.as_ref().map(|Extension(id)| id));
     // Authentication accepts only `?token=` because browser WebSocket APIs cannot set custom headers and the
     // cookie mechanism has been removed (see auth.rs). Preserve missing/invalid/valid state in a fingerprint
     // used by rejection logs and error frames, distinguishing absent credentials from expired sessions.
@@ -78,7 +83,7 @@ pub async fn ws_handler(
     } else {
         None
     };
-    ws.on_upgrade(move |socket| handle_socket(socket, ctx, query_authed, auth_fp, addr.ip(), share))
+    ws.on_upgrade(move |socket| handle_socket(socket, ctx, query_authed, auth_fp, addr.ip(), limit_key, share))
 }
 
 /// Reads the tunnel-injected grant and account headers and resolves them against the host's local share
@@ -130,6 +135,7 @@ async fn handle_socket(
     token_authed: bool,
     auth_fp: String,
     ip: std::net::IpAddr,
+    limit_key: LimitKey,
     mut share: Option<super::share_policy::ShareScope>,
 ) {
     let conn_source = format!("ws-{}", NEXT_CONN_ID.fetch_add(1, Ordering::SeqCst));
@@ -153,7 +159,7 @@ async fn handle_socket(
         Some(Ok(Message::Text(first))) => {
             if let Some(client_pub) = e2ee::parse_hello(&first) {
                 let device = e2ee::parse_hello_device(&first);
-                match handshake(&ctx, &mut ws_tx, &mut ws_rx, &client_pub, ip, share.as_ref(), device.as_ref()).await {
+                match handshake(&ctx, &mut ws_tx, &mut ws_rx, &client_pub, limit_key, share.as_ref(), device.as_ref()).await {
                     Some((c, did, dname, full)) => {
                         cipher = Some(c);
                         device_id = did;
@@ -429,7 +435,7 @@ async fn handshake(
     ws_tx: &mut SplitSink<WebSocket, Message>,
     ws_rx: &mut SplitStream<WebSocket>,
     client_pub_b64: &str,
-    ip: std::net::IpAddr,
+    limit_key: LimitKey,
     share: Option<&super::share_policy::ShareScope>,
     device: Option<&(String, String)>,
 ) -> Option<(Cipher, Option<String>, Option<String>, bool)> {
@@ -465,7 +471,7 @@ async fn handshake(
     // throttling from a wrong password.
     // The reservation covers the whole credential check and moves into the Argon2 task, so a client
     // disconnecting mid-verify cannot release it before the verdict exists.
-    let Some(attempt) = ctx.limiter.allow(ip) else {
+    let Some(attempt) = ctx.limiter.allow(limit_key) else {
         if let Some(ct) = cipher.encrypt_text(&e2ee::err_msg("rate_limited")) {
             let _ = ws_tx.send(Message::Text(ct)).await;
         }
@@ -901,6 +907,7 @@ mod tests {
             mode,
             limiter: Arc::new(super::super::rate_limit::LoginRateLimiter::new()),
             tunnel_secret: None,
+            cloudflare: None,
         }
     }
 

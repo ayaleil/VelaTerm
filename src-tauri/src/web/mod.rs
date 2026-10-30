@@ -10,6 +10,8 @@
 
 mod access_store;
 mod auth;
+// Loopback listener behind the user's own cloudflared tunnel, gated by Cloudflare Access JWTs.
+pub(crate) mod cloudflare_access;
 // desktop_call also uses dispatch, so expose it within the crate rather than keeping it private to web transport.
 pub(crate) mod dispatch;
 // dispatch mints download tickets, so this is reachable from the crate rather than private to web transport.
@@ -69,11 +71,14 @@ pub(crate) struct Ctx {
     pub mode: ServeMode,
     /// Failed-login limiter, checked before any Argon2 work on `/api/login` and the WS handshake.
     /// Shared per data directory across in-process instances (see `LoginRateLimiter::shared`), so a
-    /// dual-instance `--serve` setup cannot double the per-IP attempt budget.
+    /// dual-instance `--serve` setup cannot double the per-IP attempt budget. The Cloudflare Access
+    /// instance keeps its own, keyed by verified Access identity.
     pub limiter: Arc<rate_limit::LoginRateLimiter>,
     /// Per-launch secret required on every request of a `ShareTunnel` instance. The tunnel client holds it
     /// in memory and adds it as a header; local processes cannot reach the share surface without it.
     pub tunnel_secret: Option<String>,
+    /// Cloudflare Access JWT verifier; set only on a `CloudflareAccess` instance, whose every request it gates.
+    pub cloudflare: Option<Arc<cloudflare_access::Verifier>>,
 }
 
 /// Public web-service status returned to the frontend in camelCase.
@@ -131,6 +136,9 @@ pub enum ServeMode {
     /// account tunnel, and every request must carry the per-launch tunnel secret; visitors are authorized by
     /// the relay (account and grant) and tagged with a share scope on the WebSocket.
     ShareTunnel,
+    /// Plain HTTP/ws on `127.0.0.1` behind the user's own `cloudflared` tunnel. Every request must carry a
+    /// valid Cloudflare Access JWT before the password login flow applies; clients are remote.
+    CloudflareAccess,
 }
 
 impl ServeMode {
@@ -141,14 +149,18 @@ impl ServeMode {
     /// Bind address octets: loopback modes use 127.0.0.1; both LAN modes use 0.0.0.0.
     fn bind_octets(self) -> [u8; 4] {
         match self {
-            ServeMode::LoopbackHttp | ServeMode::ShareTunnel => [127, 0, 0, 1],
+            ServeMode::LoopbackHttp | ServeMode::ShareTunnel | ServeMode::CloudflareAccess => {
+                [127, 0, 0, 1]
+            }
             _ => [0, 0, 0, 0],
         }
     }
     /// Bind-host string used for port preflight.
     fn bind_host(self) -> &'static str {
         match self {
-            ServeMode::LoopbackHttp | ServeMode::ShareTunnel => "127.0.0.1",
+            ServeMode::LoopbackHttp | ServeMode::ShareTunnel | ServeMode::CloudflareAccess => {
+                "127.0.0.1"
+            }
             _ => "0.0.0.0",
         }
     }
@@ -239,6 +251,38 @@ impl WebServer {
         port: Option<u16>,
         mode: ServeMode,
     ) -> Result<WebServerStatus, String> {
+        self.start_with(app, auth, port, mode, None)
+    }
+
+    /// Starts the Cloudflare Access instance on `127.0.0.1:<port>`, gated by `verifier` on every request.
+    pub fn start_cloudflare(
+        &self,
+        app: AppCtx,
+        password_phc: String,
+        port: u16,
+        verifier: Arc<cloudflare_access::Verifier>,
+    ) -> Result<WebServerStatus, String> {
+        self.start_with(
+            app,
+            StartAuth::PasswordHash(password_phc),
+            Some(port),
+            ServeMode::CloudflareAccess,
+            Some(verifier),
+        )
+    }
+
+    fn start_with(
+        &self,
+        app: AppCtx,
+        auth: StartAuth,
+        port: Option<u16>,
+        mode: ServeMode,
+        cloudflare: Option<Arc<cloudflare_access::Verifier>>,
+    ) -> Result<WebServerStatus, String> {
+        // The mode and its verifier go together: an ungated CloudflareAccess instance must never bind.
+        if (mode == ServeMode::CloudflareAccess) != cloudflare.is_some() {
+            return Err("Cloudflare Access mode requires a JWT verifier".into());
+        }
         // Normalize both password variants to an Argon2id PHC verifier; plaintext never outlives this
         // scope. Tunnel-only mode hashes a random throwaway password so the same AuthState plumbing
         // applies while no usable password ever exists.
@@ -303,8 +347,15 @@ impl WebServer {
             auth: auth.clone(),
             e2ee_keys: e2ee_keys.clone(),
             mode,
-            limiter: rate_limit::LoginRateLimiter::shared(&data_dir),
+            // Every tunnel peer is 127.0.0.1 and keyed by Access identity, so that bucket must not mix with
+            // the per-IP buckets of the LAN and loopback instances.
+            limiter: if mode == ServeMode::CloudflareAccess {
+                Arc::new(rate_limit::LoginRateLimiter::new())
+            } else {
+                rate_limit::LoginRateLimiter::shared(&data_dir)
+            },
             tunnel_secret,
+            cloudflare,
         };
         let handle = axum_server::Handle::new();
         let handle_clone = handle.clone();
@@ -486,7 +537,7 @@ fn status_from(
     };
     let urls: Vec<String> = match mode {
         // Loopback plaintext exposes only 127.0.0.1 for the Electron sidecar and the share tunnel server.
-        ServeMode::LoopbackHttp | ServeMode::ShareTunnel => {
+        ServeMode::LoopbackHttp | ServeMode::ShareTunnel | ServeMode::CloudflareAccess => {
             vec![format!("http://127.0.0.1:{port}")]
         }
         // LAN modes enumerate LAN addresses and choose HTTP for mobile or HTTPS for browser remote access.
@@ -519,6 +570,7 @@ fn status_from(
 /// Builds public login/static routes and protected `/api/*` plus `/ws` routes.
 fn build_router(ctx: Ctx) -> Router {
     let tunnel_secret = ctx.tunnel_secret.clone();
+    let cloudflare = ctx.cloudflare.clone();
     Router::new()
         .route("/api/login", post(auth::login))
         .route("/api/me", get(auth::me))
@@ -541,6 +593,11 @@ fn build_router(ctx: Ctx) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             tunnel_secret,
             tunnel_gate,
+        ))
+        // Outermost: no route, static asset, or audit record is reached before Access verification.
+        .layer(axum::middleware::from_fn_with_state(
+            cloudflare,
+            cloudflare_access::gate,
         ))
         .with_state(ctx)
 }

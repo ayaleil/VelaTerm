@@ -171,6 +171,8 @@ pub struct HeadlessHost {
     /// controlled by `web_server_start/stop`. This is separate from `serve_main`'s persistent plaintext
     /// loopback instance, which is essential to the Electron renderer and must never be shared.
     remote_web: WebServer,
+    /// Cloudflare Access instance on `127.0.0.1`, controlled by `cloudflare_access_start/stop`.
+    cloudflare_web: WebServer,
 }
 
 impl HeadlessHost {
@@ -183,6 +185,7 @@ impl HeadlessHost {
             hooks: OnceLock::new(),
             events: EventBus::new(),
             remote_web: WebServer::new(),
+            cloudflare_web: WebServer::new(),
         }
     }
 
@@ -258,6 +261,19 @@ impl AppCtx {
             #[cfg(feature = "gui")]
             AppCtx::Tauri(app) => app.state::<WebServer>().inner(),
             AppCtx::Headless(host) => &host.remote_web,
+        }
+    }
+
+    /// Cloudflare Access instance, independent of the LAN remote-access instance.
+    pub fn cloudflare_web(&self) -> &WebServer {
+        match self {
+            #[cfg(feature = "gui")]
+            AppCtx::Tauri(app) => {
+                &app.state::<crate::web::cloudflare_access::CloudflareAccessServer>()
+                    .inner()
+                    .0
+            }
+            AppCtx::Headless(host) => &host.cloudflare_web,
         }
     }
 
