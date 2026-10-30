@@ -29,10 +29,11 @@ use argon2::Argon2;
 use axum::extract::{ConnectInfo, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::Json;
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::cloudflare_access::{login_limit_key, AccessIdentity};
 use super::rate_limit::{AttemptGuard, VERIFY_SEMAPHORE};
 use super::{access_store, Ctx};
 
@@ -455,17 +456,19 @@ pub struct LoginBody {
 /// The token is the sole credential. Web clients keep it in per-window sessionStorage and mobile clients
 /// in memory, presenting it in WebSocket URLs or HTTP headers. No cookie is issued.
 ///
-/// This endpoint is reachable unauthenticated, so it is rate-limited per IP **before** any Argon2 work,
-/// and the verification itself runs on the blocking pool behind the process-wide semaphore.
+/// This endpoint is reachable unauthenticated, so it is rate-limited per client (peer IP, or the verified
+/// Cloudflare Access identity) **before** any Argon2 work, and the verification itself runs on the
+/// blocking pool behind the process-wide semaphore.
 pub async fn login(
     State(ctx): State<Ctx>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    identity: Option<Extension<AccessIdentity>>,
     Json(body): Json<LoginBody>,
 ) -> impl IntoResponse {
-    let ip = addr.ip();
+    let key = login_limit_key(addr.ip(), identity.as_ref().map(|Extension(id)| id));
     // The reservation moves into the Argon2 task, so a client disconnecting mid-verify cannot release
     // it before the verdict exists (see AuthState::verify_attempt).
-    let Some(attempt) = ctx.limiter.allow(ip) else {
+    let Some(attempt) = ctx.limiter.allow(key) else {
         // The frontend maps 429 to its own localized message; this body is a log/curl-facing fallback.
         return (
             StatusCode::TOO_MANY_REQUESTS,

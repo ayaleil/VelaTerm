@@ -972,6 +972,29 @@ const ko: typeof en = {
   "remote.mirror": "기기 간 레이아웃 미러링", // Mirror layout across devices
   "remote.mirrorHint":
     "탭, 분할, 활성 세션이 연결된 모든 기기에서 동일하게 유지됩니다. 키보드 포커스는 기기마다 그대로 유지됩니다.", // Tabs, splits, and the active session stay the same on every connected device. Keyboard focus stays put on each one.
+  "remote.cloudflareTitle": "Cloudflare Access", // Cloudflare Access
+  "remote.cloudflareDesc": "직접 운영하는 cloudflared 터널을 위해 VelaTerm을 로컬 포트로 제공합니다. 모든 요청에 유효한 Cloudflare Access 토큰이 필요하며, 그 다음 접근 비밀번호가 적용됩니다.", // Serve VelaTerm on a local port for your own cloudflared tunnel. Every request must carry a valid Cloudflare Access token, then the access password applies.
+  "remote.cloudflareEnable": "Cloudflare Access 사용", // Enable Cloudflare Access
+  "remote.cloudflareTeamDomain": "팀 도메인", // Team domain
+  "remote.cloudflareAud": "AUD 태그", // AUD tag
+  "remote.cloudflarePort": "로컬 포트", // Local port
+  "remote.cloudflareEmails": "허용 이메일", // Allowed emails
+  "remote.cloudflareEmailsPlaceholder": "선택 사항, 쉼표로 구분", // Optional, comma-separated
+  "remote.cloudflarePassword": "접근 비밀번호", // Access password
+  "remote.cloudflarePasswordSaved": "비워 두면 저장된 비밀번호를 유지합니다", // Leave empty to keep the saved password
+  "remote.cloudflareActive": "활성 주소", // Active on
+  "remote.cloudflareHint": "cloudflared 터널을 이 URL로 지정하세요.", // Point your cloudflared tunnel to this URL.
+  "remote.cloudflareTeamDomainRequired": "Cloudflare Access 팀 도메인을 입력하세요.", // Enter your Cloudflare Access team domain.
+  "remote.cloudflareAudRequired": "Application Audience(AUD) 태그를 입력하세요.", // Enter the Application Audience (AUD) tag.
+  "remote.cloudflareHelp": "Cloudflare에서 이 값을 찾는 위치", // Where to find these values in Cloudflare
+  "remote.cloudflareHelpTeamDomain": "Zero Trust › Settings에서 팀 도메인을 확인할 수 있습니다(예: <team>.cloudflareaccess.com).", // Zero Trust › Settings shows your team domain, for example <team>.cloudflareaccess.com.
+  "remote.cloudflareHelpAud": "Zero Trust › Access controls › Applications › 자체 호스팅 앱 › Configure › Additional settings › Application Audience (AUD) Tag.", // Zero Trust › Access controls › Applications › your self-hosted app › Configure › Additional settings › Application Audience (AUD) Tag.
+  "remote.cloudflareHelpTunnelTitle": "터널", // Tunnel
+  "remote.cloudflareHelpTunnel": (port) => `Networking › Tunnels › 사용할 터널 › Routes › Add route › Published application에서 서비스 URL을 http://127.0.0.1:${port}(으)로 설정합니다.`, // Networking › Tunnels › your tunnel › Routes › Add route › Published application, with the service URL http://127.0.0.1:{port}.
+  "remote.cloudflareHelpEmailTitle": "이메일 코드 로그인", // Email code login
+  "remote.cloudflareHelpEmail": "Zero Trust › Integrations › Identity providers › One-time PIN. 앱 정책에서는 Allow › Include › Emails를 사용하세요.", // Zero Trust › Integrations › Identity providers › One-time PIN. In the app policy, use Allow › Include › Emails.
+  "remote.cloudflareHelpDashboard": "대시보드", // Dashboard
+  "remote.cloudflareHelpDocs": "문서", // Docs
 
   // ── Remote connection panel ──
   "connect.wslUpgrade": "이 작업 공간에서 다른 버전의 서버가 실행 중입니다. 서버를 다시 시작하면 이 WSL 작업 공간의 모든 실행 중인 세션이 종료됩니다.",

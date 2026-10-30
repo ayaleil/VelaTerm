@@ -984,6 +984,29 @@ const ru: typeof en = {
   "remote.mirror": "Зеркалировать раскладку на всех устройствах", // Mirror layout across devices
   "remote.mirrorHint":
     "Вкладки, разделения и активная сессия одинаковы на всех подключённых устройствах. Фокус клавиатуры на каждом остаётся на месте.", // Tabs, splits, and the active session stay the same on every connected device. Keyboard focus stays put on each one.
+  "remote.cloudflareTitle": "Cloudflare Access", // Cloudflare Access
+  "remote.cloudflareDesc": "Открывает VelaTerm на локальном порту для вашего собственного туннеля cloudflared. Каждый запрос должен содержать действительный токен Cloudflare Access, после чего действует пароль доступа.", // Serve VelaTerm on a local port for your own cloudflared tunnel. Every request must carry a valid Cloudflare Access token, then the access password applies.
+  "remote.cloudflareEnable": "Включить Cloudflare Access", // Enable Cloudflare Access
+  "remote.cloudflareTeamDomain": "Домен команды", // Team domain
+  "remote.cloudflareAud": "Тег AUD", // AUD tag
+  "remote.cloudflarePort": "Локальный порт", // Local port
+  "remote.cloudflareEmails": "Разрешённые адреса почты", // Allowed emails
+  "remote.cloudflareEmailsPlaceholder": "Необязательно, через запятую", // Optional, comma-separated
+  "remote.cloudflarePassword": "Пароль доступа", // Access password
+  "remote.cloudflarePasswordSaved": "Оставьте пустым, чтобы сохранить текущий пароль", // Leave empty to keep the saved password
+  "remote.cloudflareActive": "Активно на", // Active on
+  "remote.cloudflareHint": "Направьте туннель cloudflared на этот URL.", // Point your cloudflared tunnel to this URL.
+  "remote.cloudflareTeamDomainRequired": "Введите домен команды Cloudflare Access.", // Enter your Cloudflare Access team domain.
+  "remote.cloudflareAudRequired": "Введите тег Application Audience (AUD).", // Enter the Application Audience (AUD) tag.
+  "remote.cloudflareHelp": "Где найти эти значения в Cloudflare", // Where to find these values in Cloudflare
+  "remote.cloudflareHelpTeamDomain": "В Zero Trust › Settings указан домен команды, например <team>.cloudflareaccess.com.", // Zero Trust › Settings shows your team domain, for example <team>.cloudflareaccess.com.
+  "remote.cloudflareHelpAud": "Zero Trust › Access controls › Applications › ваше self-hosted приложение › Configure › Additional settings › Application Audience (AUD) Tag.", // Zero Trust › Access controls › Applications › your self-hosted app › Configure › Additional settings › Application Audience (AUD) Tag.
+  "remote.cloudflareHelpTunnelTitle": "Туннель", // Tunnel
+  "remote.cloudflareHelpTunnel": (port) => `Networking › Tunnels › ваш туннель › Routes › Add route › Published application, URL сервиса http://127.0.0.1:${port}.`, // Networking › Tunnels › your tunnel › Routes › Add route › Published application, with the service URL http://127.0.0.1:{port}.
+  "remote.cloudflareHelpEmailTitle": "Вход по коду из письма", // Email code login
+  "remote.cloudflareHelpEmail": "Zero Trust › Integrations › Identity providers › One-time PIN. В политике приложения используйте Allow › Include › Emails.", // Zero Trust › Integrations › Identity providers › One-time PIN. In the app policy, use Allow › Include › Emails.
+  "remote.cloudflareHelpDashboard": "Панель", // Dashboard
+  "remote.cloudflareHelpDocs": "Документация", // Docs
 
   // ── Remote connection panel ──
   "connect.wslUpgrade": "В этом рабочем пространстве запущена другая версия сервера. Перезапуск сервера завершит все активные сессии в этом рабочем пространстве WSL.",
