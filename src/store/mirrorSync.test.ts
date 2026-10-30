@@ -155,6 +155,7 @@ function snapshotSource(tab: string): Parameters<typeof buildMirrorLayout>[0] {
     lastActiveSessionTabId: tab,
     activeSessionId: tab,
     focusedPaneId: `p-${tab}`,
+    activeProjectId: null,
     paneTrees: { [tab]: leaf(`p-${tab}`, tab) },
     ephemeralSessions: {},
     docTabs: {},

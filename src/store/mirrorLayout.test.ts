@@ -77,6 +77,7 @@ function source(over: Partial<MirrorLayoutSource> = {}): MirrorLayoutSource {
     lastActiveSessionTabId: "A",
     activeSessionId: "A",
     focusedPaneId: "pa",
+    activeProjectId: null,
     paneTrees: { A: leaf("pa", "A") },
     ephemeralSessions: {},
     docTabs: {},

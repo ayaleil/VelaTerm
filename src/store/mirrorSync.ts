@@ -79,6 +79,7 @@ const WATCHED = [
   "sidebarTreeTabs",
   "primarySidebarTreeViewId",
   "activeSidebarTreeViewId",
+  "activeProjectId",
 ] as const;
 
 /** Serialize the arrangement this client would publish right now. */
