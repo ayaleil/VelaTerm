@@ -967,6 +967,29 @@ const vi: typeof en = {
   "remote.mirror": "Đồng bộ bố cục giữa các thiết bị", // Mirror layout across devices
   "remote.mirrorHint":
     "Thẻ, khung chia và phiên đang mở giống nhau trên mọi thiết bị đã kết nối. Tiêu điểm bàn phím trên từng thiết bị vẫn giữ nguyên.", // Tabs, splits, and the active session stay the same on every connected device. Keyboard focus stays put on each one.
+  "remote.cloudflareTitle": "Cloudflare Access", // Cloudflare Access
+  "remote.cloudflareDesc": "Phục vụ VelaTerm trên một cổng cục bộ cho đường hầm cloudflared của riêng bạn. Mọi yêu cầu phải có token Cloudflare Access hợp lệ, sau đó mới áp dụng mật khẩu truy cập.", // Serve VelaTerm on a local port for your own cloudflared tunnel. Every request must carry a valid Cloudflare Access token, then the access password applies.
+  "remote.cloudflareEnable": "Bật Cloudflare Access", // Enable Cloudflare Access
+  "remote.cloudflareTeamDomain": "Tên miền nhóm", // Team domain
+  "remote.cloudflareAud": "Thẻ AUD", // AUD tag
+  "remote.cloudflarePort": "Cổng cục bộ", // Local port
+  "remote.cloudflareEmails": "Email được phép", // Allowed emails
+  "remote.cloudflareEmailsPlaceholder": "Không bắt buộc, phân tách bằng dấu phẩy", // Optional, comma-separated
+  "remote.cloudflarePassword": "Mật khẩu truy cập", // Access password
+  "remote.cloudflarePasswordSaved": "Để trống để giữ mật khẩu đã lưu", // Leave empty to keep the saved password
+  "remote.cloudflareActive": "Đang hoạt động tại", // Active on
+  "remote.cloudflareHint": "Trỏ đường hầm cloudflared của bạn tới URL này.", // Point your cloudflared tunnel to this URL.
+  "remote.cloudflareTeamDomainRequired": "Nhập tên miền nhóm Cloudflare Access.", // Enter your Cloudflare Access team domain.
+  "remote.cloudflareAudRequired": "Nhập thẻ Application Audience (AUD).", // Enter the Application Audience (AUD) tag.
+  "remote.cloudflareHelp": "Nơi tìm các giá trị này trong Cloudflare", // Where to find these values in Cloudflare
+  "remote.cloudflareHelpTeamDomain": "Zero Trust › Settings hiển thị tên miền nhóm của bạn, ví dụ <team>.cloudflareaccess.com.", // Zero Trust › Settings shows your team domain, for example <team>.cloudflareaccess.com.
+  "remote.cloudflareHelpAud": "Zero Trust › Access controls › Applications › ứng dụng tự lưu trữ của bạn › Configure › Additional settings › Application Audience (AUD) Tag.", // Zero Trust › Access controls › Applications › your self-hosted app › Configure › Additional settings › Application Audience (AUD) Tag.
+  "remote.cloudflareHelpTunnelTitle": "Đường hầm", // Tunnel
+  "remote.cloudflareHelpTunnel": (port) => `Networking › Tunnels › đường hầm của bạn › Routes › Add route › Published application, với URL dịch vụ http://127.0.0.1:${port}.`, // Networking › Tunnels › your tunnel › Routes › Add route › Published application, with the service URL http://127.0.0.1:{port}.
+  "remote.cloudflareHelpEmailTitle": "Đăng nhập bằng mã qua email", // Email code login
+  "remote.cloudflareHelpEmail": "Zero Trust › Integrations › Identity providers › One-time PIN. Trong chính sách của ứng dụng, dùng Allow › Include › Emails.", // Zero Trust › Integrations › Identity providers › One-time PIN. In the app policy, use Allow › Include › Emails.
+  "remote.cloudflareHelpDashboard": "Bảng điều khiển", // Dashboard
+  "remote.cloudflareHelpDocs": "Tài liệu", // Docs
   "connect.wslUpgrade": "Không gian làm việc này đang chạy một phiên bản máy chủ khác. Khởi động lại máy chủ sẽ kết thúc tất cả các phiên đang chạy trong không gian làm việc WSL này.",
   "connect.wslRestart": "Khởi động lại máy chủ và kết nối",
   "connect.wsl": "WSL",

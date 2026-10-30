@@ -663,6 +663,7 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
         .manage(agent::chat::engine::ChatManager::new())
         .manage(WebServer::new())
         .manage(web::local_link::LocalLinkServer::new())
+        .manage(web::cloudflare_access::CloudflareAccessServer::new())
         .manage(browser::BrowserManager::new())
         .manage(QuitState::default())
         .manage(NativeTheme::default())
@@ -995,13 +996,16 @@ fn run_with_builder(builder: tauri::Builder<tauri::Wry>, initial_open_project: O
             {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
-                    match command_core::web_server_autostart(&AppCtx::Tauri(handle)) {
+                    match command_core::web_server_autostart(&AppCtx::Tauri(handle.clone())) {
                         Ok(Some(status)) => println!(
                             "remote access auto-started on port {}",
                             status.port.unwrap_or(0)
                         ),
                         Ok(None) => {}
                         Err(e) => crate::diagnostic_warn!("remote access auto-start failed: {e}"),
+                    }
+                    if let Err(e) = command_core::cloudflare_access_autostart(&AppCtx::Tauri(handle)) {
+                        crate::diagnostic_warn!("Cloudflare Access auto-start failed: {e}");
                     }
                 });
             }
@@ -1813,6 +1817,11 @@ fn serve_main(args: &ServeArgs) -> Result<(), String> {
             Ok(None) => {}
             Err(e) => crate::diagnostic_warn!("  remote access auto-start failed: {e}"),
         }
+        match command_core::cloudflare_access_autostart(&ctx) {
+            Ok(Some(port)) => println!("  Cloudflare Access listener on http://127.0.0.1:{port}"),
+            Ok(None) => {}
+            Err(e) => crate::diagnostic_warn!("  Cloudflare Access auto-start failed: {e}"),
+        }
         let _ = web::public_relay::start(&ctx);
     }
 
@@ -1863,6 +1872,7 @@ fn serve_main(args: &ServeArgs) -> Result<(), String> {
     diagnostics::flush();
     web.stop();
     ctx.remote_web().stop();
+    ctx.cloudflare_web().stop();
     ctx.chat().shutdown(&ctx);
     ctx.pty().kill_all();
     // Match GUI removal of this process's pasted-image files when cleanup is enabled.

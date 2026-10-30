@@ -2288,10 +2288,187 @@ pub fn web_server_autostart(ctx: &AppCtx) -> Result<Option<crate::web::WebServer
     }
 }
 
+// Optional Cloudflare Access listener (web/cloudflare_access.rs): a second, loopback-only instance behind the
+// user's own cloudflared tunnel. It runs independently of LAN remote access and persists the same way.
+
+const CF_ENABLED_KEY: &str = "remoteAccess.cloudflare.enabled";
+const CF_TEAM_DOMAIN_KEY: &str = "remoteAccess.cloudflare.teamDomain";
+const CF_AUD_KEY: &str = "remoteAccess.cloudflare.aud";
+const CF_PORT_KEY: &str = "remoteAccess.cloudflare.port";
+/// Comma-separated lowercase emails; empty admits every identity Cloudflare Access let through.
+const CF_ALLOWED_EMAILS_KEY: &str = "remoteAccess.cloudflare.allowedEmails";
+/// Argon2id verifier for this listener's password login, kept apart so it survives LAN password changes.
+const CF_PASSWORD_HASH_KEY: &str = "remoteAccess.cloudflare.passwordHash";
+
+/// Cloudflare Access listener status and saved settings for the panel, serialized in camelCase.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudflareAccessStatus {
+    pub running: bool,
+    pub port: Option<u16>,
+    /// Whether the listener auto-starts on the next launch.
+    pub enabled: bool,
+    pub team_domain: String,
+    pub aud: String,
+    pub saved_port: u16,
+    pub allowed_emails: Vec<String>,
+    /// Whether a stored password exists, so the panel can leave its password field optional.
+    pub has_password: bool,
+    pub autostart_error: Option<String>,
+}
+
+fn non_empty_setting(
+    settings: &std::collections::HashMap<String, String>,
+    key: &str,
+) -> Option<String> {
+    settings
+        .get(key)
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+fn cloudflare_emails(settings: &std::collections::HashMap<String, String>) -> Vec<String> {
+    let raw: Vec<String> = settings
+        .get(CF_ALLOWED_EMAILS_KEY)
+        .map(|v| v.split(',').map(str::to_string).collect())
+        .unwrap_or_default();
+    crate::web::cloudflare_access::normalize_emails(&raw)
+}
+
+/// The listener's own verifier, falling back to the LAN remote-access password. Start, auto-start, and
+/// status all resolve it here so they agree on whether a password exists.
+fn cloudflare_password_hash(settings: &std::collections::HashMap<String, String>) -> Option<String> {
+    non_empty_setting(settings, CF_PASSWORD_HASH_KEY)
+        .or_else(|| non_empty_setting(settings, REMOTE_PASSWORD_HASH_KEY))
+}
+
+fn cloudflare_saved_port(settings: &std::collections::HashMap<String, String>) -> Option<u16> {
+    settings
+        .get(CF_PORT_KEY)
+        .and_then(|p| p.trim().parse().ok())
+        .filter(|p| *p != 0)
+}
+
+fn launch_cloudflare(
+    ctx: &AppCtx,
+    config: crate::web::cloudflare_access::AccessConfig,
+    phc: String,
+    port: u16,
+) -> Result<(), String> {
+    let verifier = std::sync::Arc::new(crate::web::cloudflare_access::Verifier::for_team(config));
+    ctx.cloudflare_web()
+        .start_cloudflare(ctx.clone(), phc, port, verifier)
+        .map(|_| ())
+}
+
+pub fn cloudflare_access_status(ctx: &AppCtx) -> CloudflareAccessStatus {
+    let server = ctx.cloudflare_web().status();
+    let settings = get_app_settings(ctx).unwrap_or_default();
+    CloudflareAccessStatus {
+        running: server.running,
+        port: server.port,
+        enabled: settings.get(CF_ENABLED_KEY).map(String::as_str) == Some("1"),
+        team_domain: non_empty_setting(&settings, CF_TEAM_DOMAIN_KEY).unwrap_or_default(),
+        aud: non_empty_setting(&settings, CF_AUD_KEY).unwrap_or_default(),
+        saved_port: cloudflare_saved_port(&settings)
+            .unwrap_or(crate::web::cloudflare_access::DEFAULT_PORT),
+        allowed_emails: cloudflare_emails(&settings),
+        has_password: cloudflare_password_hash(&settings).is_some(),
+        autostart_error: server.autostart_error,
+    }
+}
+
+/// Validates the Access settings, starts (or restarts) the loopback listener, and persists the settings so
+/// the next launch auto-starts it. A typed `password` replaces the stored one; without it the stored
+/// verifier is reused, and with neither the start is refused.
+pub fn cloudflare_access_start(
+    ctx: &AppCtx,
+    team_domain: &str,
+    aud: &str,
+    port: Option<u16>,
+    allowed_emails: &[String],
+    password: Option<&str>,
+) -> Result<CloudflareAccessStatus, String> {
+    let config = crate::web::cloudflare_access::AccessConfig::new(team_domain, aud, allowed_emails)?;
+    let port = port.unwrap_or(crate::web::cloudflare_access::DEFAULT_PORT);
+    if port == 0 {
+        return Err("Port must be between 1 and 65535".into());
+    }
+    let phc = match password.filter(|p| !p.trim().is_empty()) {
+        Some(pw) => crate::web::hash_password(pw)?,
+        None => cloudflare_password_hash(&get_app_settings(ctx)?)
+            .ok_or("Please set an access password first")?,
+    };
+    launch_cloudflare(ctx, config.clone(), phc.clone(), port)?;
+    persist_remote_settings(
+        ctx,
+        std::collections::HashMap::from([
+            (CF_ENABLED_KEY.to_string(), "1".to_string()),
+            (CF_TEAM_DOMAIN_KEY.to_string(), config.team_domain),
+            (CF_AUD_KEY.to_string(), config.aud),
+            (CF_PORT_KEY.to_string(), port.to_string()),
+            (CF_ALLOWED_EMAILS_KEY.to_string(), config.allowed_emails.join(",")),
+            (CF_PASSWORD_HASH_KEY.to_string(), phc),
+        ]),
+    );
+    Ok(cloudflare_access_status(ctx))
+}
+
+/// Stops the listener and disables its auto-start; the saved settings stay for prefill.
+pub fn cloudflare_access_stop(ctx: &AppCtx) -> Result<(), String> {
+    ctx.cloudflare_web().stop();
+    persist_remote_settings(
+        ctx,
+        std::collections::HashMap::from([(CF_ENABLED_KEY.to_string(), "0".to_string())]),
+    );
+    Ok(())
+}
+
+/// Auto-starts the listener when its persisted enabled flag is set. Returns the bound port, or Ok(None) when
+/// disabled or already running. Failures are recorded for the panel and never fatal.
+pub fn cloudflare_access_autostart(ctx: &AppCtx) -> Result<Option<u16>, String> {
+    if ctx.cloudflare_web().status().running {
+        return Ok(None);
+    }
+    let settings = match get_app_settings(ctx) {
+        Ok(s) => s,
+        Err(e) => {
+            ctx.cloudflare_web().set_autostart_error(Some(e.clone()));
+            return Err(e);
+        }
+    };
+    if settings.get(CF_ENABLED_KEY).map(String::as_str) != Some("1") {
+        return Ok(None);
+    }
+    match cloudflare_start_from_settings(ctx, &settings) {
+        Ok(port) => Ok(Some(port)),
+        Err(e) => {
+            ctx.cloudflare_web().set_autostart_error(Some(e.clone()));
+            Err(e)
+        }
+    }
+}
+
+fn cloudflare_start_from_settings(
+    ctx: &AppCtx,
+    settings: &std::collections::HashMap<String, String>,
+) -> Result<u16, String> {
+    let phc = cloudflare_password_hash(settings).ok_or("Please set an access password first")?;
+    let port = cloudflare_saved_port(settings).ok_or("Saved Cloudflare Access port is invalid")?;
+    let config = crate::web::cloudflare_access::AccessConfig::new(
+        settings.get(CF_TEAM_DOMAIN_KEY).map(String::as_str).unwrap_or(""),
+        settings.get(CF_AUD_KEY).map(String::as_str).unwrap_or(""),
+        &cloudflare_emails(settings),
+    )?;
+    launch_cloudflare(ctx, config, phc, port)?;
+    Ok(port)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        autostart_config, check_images, get_app_settings, install_id,
+        autostart_config, check_images, cloudflare_access_autostart, cloudflare_access_start,
+        cloudflare_access_status, cloudflare_access_stop, get_app_settings, install_id,
         set_app_settings, touch_session_activity_at, web_server_autostart,
         web_server_status, web_server_stop, ChatImage, MAX_IMAGES_PER_MESSAGE, MAX_IMAGE_BYTES,
     };
@@ -2512,6 +2689,118 @@ mod tests {
             Some("$argon2id$fake")
         );
         assert!(!web_server_status(&ctx).auto_start);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn cloudflare_access_refuses_without_password_or_with_bad_settings() {
+        let tmp = std::env::temp_dir().join(format!("vlx-cc-cf-refuse-{}", uuid::Uuid::new_v4()));
+        let ctx = headless_ctx(&tmp);
+        let team = "myteam.cloudflareaccess.com";
+        let err = cloudflare_access_start(&ctx, team, "aud", Some(1), &[], None).unwrap_err();
+        assert!(err.contains("password"), "{err}");
+        assert!(cloudflare_access_start(&ctx, "evil.com", "aud", Some(1), &[], Some("pw")).is_err());
+        assert!(cloudflare_access_start(&ctx, team, " ", Some(1), &[], Some("pw")).is_err());
+        let status = cloudflare_access_status(&ctx);
+        assert!(!status.running && !status.enabled && !status.has_password);
+        assert_eq!(cloudflare_access_autostart(&ctx), Ok(None));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Start reuses the LAN password, normalizes and persists the settings, and gates every request on
+    /// the Access JWT; stop disables auto-start but keeps the settings for prefill.
+    #[test]
+    fn cloudflare_access_start_persists_gates_and_stop_disables_autostart() {
+        use std::io::{Read, Write};
+        let tmp = std::env::temp_dir().join(format!("vlx-cc-cf-start-{}", uuid::Uuid::new_v4()));
+        let ctx = headless_ctx(&tmp);
+        set_app_settings(
+            &ctx,
+            HashMap::from([(
+                "remoteAccess.passwordHash".to_string(),
+                crate::web::hash_password("pw").unwrap(),
+            )]),
+        )
+        .unwrap();
+        let port = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let status = cloudflare_access_start(
+            &ctx,
+            "https://MyTeam.cloudflareaccess.com/",
+            "aud-1",
+            Some(port),
+            &["A@Example.com".to_string()],
+            None,
+        )
+        .unwrap();
+        assert!(status.running && status.enabled && status.has_password);
+        assert_eq!(status.port, Some(port));
+        assert_eq!(status.team_domain, "myteam.cloudflareaccess.com");
+        assert_eq!(status.allowed_emails, vec!["a@example.com".to_string()]);
+
+        let mut stream = None;
+        for _ in 0..100 {
+            match std::net::TcpStream::connect(("127.0.0.1", port)) {
+                Ok(s) => {
+                    stream = Some(s);
+                    break;
+                }
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            }
+        }
+        let mut stream = stream.expect("listener never accepted connections");
+        let req = format!(
+            "GET /api/mode HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCf-Access-Jwt-Assertion: forged\r\nConnection: close\r\n\r\n"
+        );
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut resp = String::new();
+        let _ = stream.read_to_string(&mut resp);
+        assert!(resp.starts_with("HTTP/1.1 401"), "{resp}");
+
+        cloudflare_access_stop(&ctx).unwrap();
+        let status = cloudflare_access_status(&ctx);
+        assert!(!status.running && !status.enabled);
+        assert_eq!(status.saved_port, port);
+        assert_eq!(status.aud, "aud-1");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Auto-start resolves the password like start and status do: with only the LAN hash stored, a status
+    /// that reports `has_password` must also auto-start.
+    #[test]
+    fn cloudflare_access_autostart_reuses_lan_password() {
+        let tmp = std::env::temp_dir().join(format!("vlx-cc-cf-auto-{}", uuid::Uuid::new_v4()));
+        let ctx = headless_ctx(&tmp);
+        let port = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        set_app_settings(
+            &ctx,
+            HashMap::from([
+                (
+                    "remoteAccess.passwordHash".to_string(),
+                    crate::web::hash_password("pw").unwrap(),
+                ),
+                ("remoteAccess.cloudflare.enabled".to_string(), "1".to_string()),
+                (
+                    "remoteAccess.cloudflare.teamDomain".to_string(),
+                    "myteam.cloudflareaccess.com".to_string(),
+                ),
+                ("remoteAccess.cloudflare.aud".to_string(), "aud-1".to_string()),
+                ("remoteAccess.cloudflare.port".to_string(), port.to_string()),
+            ]),
+        )
+        .unwrap();
+        assert!(cloudflare_access_status(&ctx).has_password);
+        assert_eq!(cloudflare_access_autostart(&ctx), Ok(Some(port)));
+        let status = cloudflare_access_status(&ctx);
+        assert!(status.running && status.autostart_error.is_none());
+        cloudflare_access_stop(&ctx).unwrap();
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

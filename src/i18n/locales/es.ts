@@ -977,6 +977,29 @@ const es: typeof en = {
   "remote.mirror": "Reflejar el diseño en todos los dispositivos", // Mirror layout across devices
   "remote.mirrorHint":
     "Las pestañas, las divisiones y la sesión activa se mantienen iguales en todos los dispositivos conectados. El foco del teclado no cambia en ninguno.", // Tabs, splits, and the active session stay the same on every connected device. Keyboard focus stays put on each one.
+  "remote.cloudflareTitle": "Cloudflare Access", // Cloudflare Access
+  "remote.cloudflareDesc": "Sirve VelaTerm en un puerto local para tu propio túnel cloudflared. Cada solicitud debe incluir un token válido de Cloudflare Access y después se aplica la contraseña de acceso.", // Serve VelaTerm on a local port for your own cloudflared tunnel. Every request must carry a valid Cloudflare Access token, then the access password applies.
+  "remote.cloudflareEnable": "Activar Cloudflare Access", // Enable Cloudflare Access
+  "remote.cloudflareTeamDomain": "Dominio del equipo", // Team domain
+  "remote.cloudflareAud": "Etiqueta AUD", // AUD tag
+  "remote.cloudflarePort": "Puerto local", // Local port
+  "remote.cloudflareEmails": "Correos permitidos", // Allowed emails
+  "remote.cloudflareEmailsPlaceholder": "Opcional, separados por comas", // Optional, comma-separated
+  "remote.cloudflarePassword": "Contraseña de acceso", // Access password
+  "remote.cloudflarePasswordSaved": "Déjalo vacío para conservar la contraseña guardada", // Leave empty to keep the saved password
+  "remote.cloudflareActive": "Activo en", // Active on
+  "remote.cloudflareHint": "Apunta tu túnel cloudflared a esta URL.", // Point your cloudflared tunnel to this URL.
+  "remote.cloudflareTeamDomainRequired": "Ingresa el dominio de equipo de Cloudflare Access.", // Enter your Cloudflare Access team domain.
+  "remote.cloudflareAudRequired": "Ingresa la etiqueta Application Audience (AUD).", // Enter the Application Audience (AUD) tag.
+  "remote.cloudflareHelp": "Dónde encontrar estos valores en Cloudflare", // Where to find these values in Cloudflare
+  "remote.cloudflareHelpTeamDomain": "En Zero Trust › Settings verás tu dominio del equipo, por ejemplo <team>.cloudflareaccess.com.", // Zero Trust › Settings shows your team domain, for example <team>.cloudflareaccess.com.
+  "remote.cloudflareHelpAud": "Zero Trust › Access controls › Applications › tu aplicación self-hosted › Configure › Additional settings › Application Audience (AUD) Tag.", // Zero Trust › Access controls › Applications › your self-hosted app › Configure › Additional settings › Application Audience (AUD) Tag.
+  "remote.cloudflareHelpTunnelTitle": "Túnel", // Tunnel
+  "remote.cloudflareHelpTunnel": (port) => `Networking › Tunnels › tu túnel › Routes › Add route › Published application, con la URL de servicio http://127.0.0.1:${port}.`, // Networking › Tunnels › your tunnel › Routes › Add route › Published application, with the service URL http://127.0.0.1:{port}.
+  "remote.cloudflareHelpEmailTitle": "Inicio de sesión con código por correo", // Email code login
+  "remote.cloudflareHelpEmail": "Zero Trust › Integrations › Identity providers › One-time PIN. En la política de la aplicación, usa Allow › Include › Emails.", // Zero Trust › Integrations › Identity providers › One-time PIN. In the app policy, use Allow › Include › Emails.
+  "remote.cloudflareHelpDashboard": "Panel", // Dashboard
+  "remote.cloudflareHelpDocs": "Documentación", // Docs
 
   // ── Remote connection panel ──
   "connect.wslUpgrade": "Este espacio de trabajo utiliza otra versión del servidor. Reiniciar el servidor finaliza todas las sesiones activas de este espacio de trabajo WSL.",

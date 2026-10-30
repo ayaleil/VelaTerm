@@ -975,6 +975,29 @@ const ja: typeof en = {
   "remote.mirror": "デバイス間でレイアウトを同期", // Mirror layout across devices
   "remote.mirrorHint":
     "タブ・分割・アクティブなセッションが接続中のすべての端末で一致します。キーボードフォーカスは各端末でそのまま保たれます。", // Tabs, splits, and the active session stay the same on every connected device. Keyboard focus stays put on each one.
+  "remote.cloudflareTitle": "Cloudflare Access", // Cloudflare Access
+  "remote.cloudflareDesc": "自分の cloudflared トンネル用に VelaTerm をローカルポートで提供します。すべてのリクエストに有効な Cloudflare Access トークンが必要で、その後アクセスパスワードが適用されます。", // Serve VelaTerm on a local port for your own cloudflared tunnel. Every request must carry a valid Cloudflare Access token, then the access password applies.
+  "remote.cloudflareEnable": "Cloudflare Access を有効にする", // Enable Cloudflare Access
+  "remote.cloudflareTeamDomain": "チームドメイン", // Team domain
+  "remote.cloudflareAud": "AUD タグ", // AUD tag
+  "remote.cloudflarePort": "ローカルポート", // Local port
+  "remote.cloudflareEmails": "許可するメールアドレス", // Allowed emails
+  "remote.cloudflareEmailsPlaceholder": "任意、カンマ区切り", // Optional, comma-separated
+  "remote.cloudflarePassword": "アクセスパスワード", // Access password
+  "remote.cloudflarePasswordSaved": "空欄のままにすると保存済みのパスワードを使います", // Leave empty to keep the saved password
+  "remote.cloudflareActive": "有効:", // Active on
+  "remote.cloudflareHint": "cloudflared トンネルをこの URL に向けてください。", // Point your cloudflared tunnel to this URL.
+  "remote.cloudflareTeamDomainRequired": "Cloudflare Access のチームドメインを入力してください。", // Enter your Cloudflare Access team domain.
+  "remote.cloudflareAudRequired": "Application Audience (AUD) タグを入力してください。", // Enter the Application Audience (AUD) tag.
+  "remote.cloudflareHelp": "Cloudflare でこれらの値を確認する場所", // Where to find these values in Cloudflare
+  "remote.cloudflareHelpTeamDomain": "Zero Trust › Settings にチームドメインが表示されます(例: <team>.cloudflareaccess.com)。", // Zero Trust › Settings shows your team domain, for example <team>.cloudflareaccess.com.
+  "remote.cloudflareHelpAud": "Zero Trust › Access controls › Applications › セルフホストアプリ › Configure › Additional settings › Application Audience (AUD) Tag。", // Zero Trust › Access controls › Applications › your self-hosted app › Configure › Additional settings › Application Audience (AUD) Tag.
+  "remote.cloudflareHelpTunnelTitle": "トンネル", // Tunnel
+  "remote.cloudflareHelpTunnel": (port) => `Networking › Tunnels › 使用するトンネル › Routes › Add route › Published application で、サービス URL を http://127.0.0.1:${port} にします。`, // Networking › Tunnels › your tunnel › Routes › Add route › Published application, with the service URL http://127.0.0.1:{port}.
+  "remote.cloudflareHelpEmailTitle": "メールコードでのログイン", // Email code login
+  "remote.cloudflareHelpEmail": "Zero Trust › Integrations › Identity providers › One-time PIN。アプリのポリシーでは Allow › Include › Emails を使います。", // Zero Trust › Integrations › Identity providers › One-time PIN. In the app policy, use Allow › Include › Emails.
+  "remote.cloudflareHelpDashboard": "ダッシュボード", // Dashboard
+  "remote.cloudflareHelpDocs": "ドキュメント", // Docs
 
   // ── Remote connection panel ──
   "connect.wslUpgrade": "このワークスペースでは別のバージョンのサーバーが動作しています。サーバーを再起動すると、この WSL ワークスペースで実行中のすべてのセッションが終了します。",

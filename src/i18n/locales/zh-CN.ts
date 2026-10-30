@@ -961,6 +961,29 @@ const zhCN: typeof en = {
   "remote.mirror": "多端界面镜像", // Mirror layout across devices
   "remote.mirrorHint":
     "标签、分屏和当前会话在所有已连接设备上保持一致，各端的键盘焦点互不打扰。", // Tabs, splits, and the active session stay the same on every connected device. Keyboard focus stays put on each one.
+  "remote.cloudflareTitle": "Cloudflare Access", // Cloudflare Access
+  "remote.cloudflareDesc": "在本地端口上为你自己的 cloudflared 隧道提供 VelaTerm。每个请求都必须携带有效的 Cloudflare Access 令牌，然后再验证访问密码。", // Serve VelaTerm on a local port for your own cloudflared tunnel. Every request must carry a valid Cloudflare Access token, then the access password applies.
+  "remote.cloudflareEnable": "启用 Cloudflare Access", // Enable Cloudflare Access
+  "remote.cloudflareTeamDomain": "团队域名", // Team domain
+  "remote.cloudflareAud": "AUD 标签", // AUD tag
+  "remote.cloudflarePort": "本地端口", // Local port
+  "remote.cloudflareEmails": "允许的邮箱", // Allowed emails
+  "remote.cloudflareEmailsPlaceholder": "可选，用逗号分隔", // Optional, comma-separated
+  "remote.cloudflarePassword": "访问密码", // Access password
+  "remote.cloudflarePasswordSaved": "留空则保留已保存的密码", // Leave empty to keep the saved password
+  "remote.cloudflareActive": "已在以下地址启用", // Active on
+  "remote.cloudflareHint": "将你的 cloudflared 隧道指向此 URL。", // Point your cloudflared tunnel to this URL.
+  "remote.cloudflareTeamDomainRequired": "请输入 Cloudflare Access 团队域名。", // Enter your Cloudflare Access team domain.
+  "remote.cloudflareAudRequired": "请输入 Application Audience (AUD) 标签。", // Enter the Application Audience (AUD) tag.
+  "remote.cloudflareHelp": "在 Cloudflare 中哪里找到这些值", // Where to find these values in Cloudflare
+  "remote.cloudflareHelpTeamDomain": "Zero Trust › Settings 中显示你的团队域名,例如 <team>.cloudflareaccess.com。", // Zero Trust › Settings shows your team domain, for example <team>.cloudflareaccess.com.
+  "remote.cloudflareHelpAud": "Zero Trust › Access controls › Applications › 你的自托管应用 › Configure › Additional settings › Application Audience (AUD) Tag。", // Zero Trust › Access controls › Applications › your self-hosted app › Configure › Additional settings › Application Audience (AUD) Tag.
+  "remote.cloudflareHelpTunnelTitle": "隧道", // Tunnel
+  "remote.cloudflareHelpTunnel": (port) => `Networking › Tunnels › 你的隧道 › Routes › Add route › Published application,服务 URL 填 http://127.0.0.1:${port}。`, // Networking › Tunnels › your tunnel › Routes › Add route › Published application, with the service URL http://127.0.0.1:{port}.
+  "remote.cloudflareHelpEmailTitle": "邮箱验证码登录", // Email code login
+  "remote.cloudflareHelpEmail": "Zero Trust › Integrations › Identity providers › One-time PIN。在应用策略中使用 Allow › Include › Emails。", // Zero Trust › Integrations › Identity providers › One-time PIN. In the app policy, use Allow › Include › Emails.
+  "remote.cloudflareHelpDashboard": "控制台", // Dashboard
+  "remote.cloudflareHelpDocs": "文档", // Docs
 
   // ── Remote connection panel ──
   "connect.wslUpgrade": "此工作区正在运行其他版本的服务端。重启服务端会结束此 WSL 工作区中的所有运行中会话。",

@@ -40,6 +40,8 @@ impl CallOrigin {
             // The share tunnel surface is loopback, but reaching it is not local shell access: the relay
             // authorized the visitor, so it gets the remote (non-management) command surface.
             super::ServeMode::ShareTunnel => CallOrigin::Remote,
+            // Loopback too, but every client arrives through cloudflared from the internet.
+            super::ServeMode::CloudflareAccess => CallOrigin::Remote,
         }
     }
 }
@@ -60,6 +62,10 @@ const MANAGEMENT_CMDS: &[&str] = &[
     // Mirror mode is host-side service configuration (the checkbox lives in the desktop remote-access
     // panel), so a paired device may follow the shared layout but never switch the feature for everyone.
     "mirror_set_enabled",
+    // The Cloudflare Access listener is host-side service configuration like the LAN service.
+    "cloudflare_access_start",
+    "cloudflare_access_stop",
+    "cloudflare_access_status",
 ];
 
 /// Commands that read or write stored secrets and are therefore gated to local origins — the class
@@ -1509,6 +1515,19 @@ fn dispatch_inner(app: &AppCtx, cmd: &str, args: &Value, source: &str, origin: C
             Ok(Value::Null)
         }
         "web_server_status" => to_value(core::web_server_status(app)),
+        "cloudflare_access_start" => to_value(core::cloudflare_access_start(
+            app,
+            &req_str(args, "teamDomain")?,
+            &req_str(args, "aud")?,
+            opt_u16(args, "port"),
+            &opt_str_vec(args, "allowedEmails")?,
+            args.get("password").and_then(Value::as_str),
+        )?),
+        "cloudflare_access_stop" => {
+            core::cloudflare_access_stop(app)?;
+            Ok(Value::Null)
+        }
+        "cloudflare_access_status" => to_value(core::cloudflare_access_status(app)),
         // UI mirror: every client publishes its layout here and follows what the others publish. `source`
         // comes from the transport, never from the arguments, so the echo filter cannot be spoofed.
         "mirror_get" => Ok(core::mirror_get(app)),
@@ -1690,6 +1709,14 @@ fn req_str_vec(args: &Value, key: &str) -> Result<Vec<String>, String> {
         .collect()
 }
 
+/// Optional array-of-strings: missing and null become empty; otherwise validated like [`req_str_vec`].
+fn opt_str_vec(args: &Value, key: &str) -> Result<Vec<String>, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(_) => req_str_vec(args, key),
+    }
+}
+
 /// Decode a base64 string argument to bytes. WebSocket binary payloads such as images use base64,
 /// which is roughly three times smaller than number arrays, and are restored here.
 fn b64_bytes(args: &Value, key: &str) -> Result<Vec<u8>, String> {
@@ -1750,7 +1777,7 @@ fn req_kind<T: serde::de::DeserializeOwned>(args: &Value, key: &str) -> Result<T
 
 #[cfg(test)]
 mod tests {
-    use super::{dispatch, CallOrigin, MANAGEMENT_CMDS, SECRET_CMDS};
+    use super::{dispatch, opt_str_vec, CallOrigin, MANAGEMENT_CMDS, SECRET_CMDS};
     use crate::host::{AppCtx, HeadlessHost};
     use crate::pty::manager::DESKTOP_SOURCE;
     use serde_json::{json, Value};
@@ -2094,6 +2121,9 @@ mod tests {
             // Added with mirror mode: the switch belongs to the host running the service, not to the
             // devices connecting to it.
             "mirror_set_enabled",
+            "cloudflare_access_start",
+            "cloudflare_access_stop",
+            "cloudflare_access_status",
         ];
         assert_eq!(
             MANAGEMENT_CMDS, EXPECTED_GATED,
@@ -2108,6 +2138,30 @@ mod tests {
                 "{cmd} must be gated for remote origins"
             );
         }
+    }
+
+    /// A client connected through the tunnel must not reconfigure or restart the listener it came in on:
+    /// even fully valid arguments are refused for a remote origin and nothing starts.
+    #[test]
+    fn remote_cloudflare_access_start_is_denied() {
+        let app = test_ctx();
+        let args = json!({
+            "teamDomain": "myteam.cloudflareaccess.com", "aud": "aud-1", "port": 1,
+            "allowedEmails": ["a@example.com"], "password": "pw"
+        });
+        let err = dispatch(&app, "cloudflare_access_start", &args, "ws-1", CallOrigin::Remote).unwrap_err();
+        assert_eq!(err, "remote_cmd_forbidden:cloudflare_access_start");
+        assert!(!app.cloudflare_web().status().running);
+    }
+
+    /// `allowedEmails` is optional, but a present value must be an array of strings.
+    #[test]
+    fn opt_str_vec_accepts_missing_and_rejects_non_strings() {
+        assert_eq!(opt_str_vec(&json!({}), "k"), Ok(Vec::new()));
+        assert_eq!(opt_str_vec(&json!({ "k": null }), "k"), Ok(Vec::new()));
+        assert_eq!(opt_str_vec(&json!({ "k": ["a"] }), "k"), Ok(vec!["a".to_string()]));
+        assert!(opt_str_vec(&json!({ "k": [1] }), "k").is_err());
+        assert!(opt_str_vec(&json!({ "k": "a" }), "k").is_err());
     }
 
     /// Secret-bearing commands (the class behind the settings ACL) are rejected for remote origins
@@ -3028,6 +3082,7 @@ mod tests {
         assert_eq!(CallOrigin::for_serve_mode(ServeMode::LoopbackHttp), CallOrigin::Local);
         assert_eq!(CallOrigin::for_serve_mode(ServeMode::LanTls), CallOrigin::Remote);
         assert_eq!(CallOrigin::for_serve_mode(ServeMode::LanHttp), CallOrigin::Remote);
+        assert_eq!(CallOrigin::for_serve_mode(ServeMode::CloudflareAccess), CallOrigin::Remote);
     }
 
     /// Mirror mode: a remote client follows and publishes the shared layout, but only a local one may
