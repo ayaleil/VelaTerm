@@ -110,6 +110,7 @@ export interface MirrorLayoutSource {
   docTabs: Record<string, DocTab>;
   browserTabs: Record<string, BrowserTab>;
   activeProjectId: string | null;
+  scopeTabsToProject: boolean;
   /**
    * Task tabs are client-local and never published: a peer without the opening conversation's context
    * could show nothing useful, so they are filtered out of `openTabs` and `activeTabId` below.
@@ -181,7 +182,8 @@ export function buildMirrorLayout(s: MirrorLayoutSource): MirrorLayout {
       ephemeralSessions: pick(s.ephemeralSessions, sessionIds),
       docTabs: pick(s.docTabs, tabIds),
       browserTabs: pick(s.browserTabs, tabIds),
-      activeProjectId: s.activeProjectId,
+      // Unscoped, the recorded project filters nothing here and must not narrow a peer's tab bar.
+      activeProjectId: s.scopeTabsToProject ? s.activeProjectId : null,
     },
     left: {
       selection: [...s.selection],
@@ -489,7 +491,9 @@ export function sanitizeMirrorLayout(raw: unknown): MirrorLayout | null {
       ephemeralSessions: metaMap<Session>(center.ephemeralSessions),
       docTabs: metaMap<DocTab>(center.docTabs),
       browserTabs: metaMap<BrowserTab>(center.browserTabs),
-      ...("activeProjectId" in center ? { activeProjectId: strOrNull(center.activeProjectId) } : {}),
+      ...(typeof center.activeProjectId === "string" || center.activeProjectId === null
+        ? { activeProjectId: center.activeProjectId }
+        : {}),
     },
     left: {
       selection: Array.isArray(left.selection)

@@ -521,11 +521,66 @@ describe("following a mirrored peer", () => {
   });
 
   it("ignores a peer's collection or unknown project", () => {
-    seed({ projects: [project("A"), project("B"), { ...project("C"), rootPath: "" }] });
+    seed({ treeLoaded: true, projects: [project("A"), project("B"), { ...project("C"), rootPath: "" }] });
     useTermStore.getState().applyMirrorLayout(peerLayout({ activeProjectId: "C" }));
-    expect(useTermStore.getState().activeProjectId).toBe("A");
+    let s = useTermStore.getState();
+    expect(s.activeProjectId).toBe("A");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
     useTermStore.getState().applyMirrorLayout(peerLayout({ activeProjectId: "nope" }));
-    expect(useTermStore.getState().activeProjectId).toBe("A");
+    s = useTermStore.getState();
+    expect(s.activeProjectId).toBe("A");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
+  });
+
+  it("keeps a local task tab in front and its project when the peer names another", () => {
+    useTermStore.getState().openTaskTab("a1", {
+      task_id: "t1",
+      task_type: "workflow",
+      description: "d",
+      summary: "s",
+    } as Parameters<State["openTaskTab"]>[1]);
+    const taskTab = useTermStore.getState().activeTabId!;
+    useTermStore.getState().applyMirrorLayout(peerLayout(peerOnB));
+    const s = useTermStore.getState();
+    expect(s.activeTabId).toBe(taskTab);
+    expect(s.activeProjectId).toBe("A");
+    expect(visibleTabIds(s)).toContain(s.activeTabId);
+  });
+
+  describe("adopted before the tree loads, then checked by loadTree", () => {
+    /** Apply a peer naming `projectId` on a client whose tree has not loaded yet, then load `projects`. */
+    async function adoptThenLoad(projectId: string, projects: Project[], sessions: Session[]) {
+      const layout = peerLayout({ ...peerOnB, activeProjectId: projectId });
+      useTermStore.setState({ treeLoaded: false, projects: [], activeProjectId: null });
+      useTermStore.getState().applyMirrorLayout(layout);
+      expect(useTermStore.getState().activeProjectId).toBe(projectId);
+      tree.data = { projects, groups: [], sessions };
+      await useTermStore.getState().loadTree();
+      return useTermStore.getState();
+    }
+
+    it("keeps a project that still exists", async () => {
+      const s = await adoptThenLoad("B", [project("A"), project("B")], [session("a1", "A"), session("a2", "A"), session("b1", "B")]);
+      expect(s.activeProjectId).toBe("B");
+      expect(visibleTabIds(s)).toContain(s.activeTabId);
+    });
+
+    it("drops a project deleted meanwhile", async () => {
+      const s = await adoptThenLoad("B", [project("A")], [session("a1", "A"), session("a2", "A")]);
+      expect(s.activeProjectId).toBeNull();
+      expect(s.activeTabId).not.toBeNull();
+      expect(visibleTabIds(s)).toContain(s.activeTabId);
+    });
+
+    it("drops a collection, which cannot be scoped to", async () => {
+      const s = await adoptThenLoad(
+        "C",
+        [project("A"), project("B"), { ...project("C"), rootPath: "" }],
+        [session("a1", "A"), session("a2", "A"), session("b1", "B")],
+      );
+      expect(s.activeProjectId).toBeNull();
+      expect(visibleTabIds(s)).toContain(s.activeTabId);
+    });
   });
 
   it("keeps its own scope when an older peer publishes no active project", () => {

@@ -2199,7 +2199,7 @@ export const useTermStore = create<TermStore>((set, get) => ({
       }
       let activeProjectId =
         state.activeProjectId &&
-        t.projects.some((p) => p.id === state.activeProjectId)
+        t.projects.some((p) => p.id === state.activeProjectId && p.rootPath !== "")
           ? state.activeProjectId
           : null;
       let layoutPatch = {};
@@ -4504,11 +4504,13 @@ export const useTermStore = create<TermStore>((set, get) => ({
     }));
     // The scope travels with the arrangement too. A peer that predates it, or names a project this client
     // cannot scope to, leaves the current one; either way the active tab must stay visible.
+    // A local active tab the peer's project would hide (a task tab, say) keeps this client's project; the
+    // two scopes then differ until the next local change, which is intended.
     set((s) => {
       const peer = c.activeProjectId;
       const known =
         peer === null ||
-        (peer !== undefined && (!s.treeLoaded || s.projects.some((p) => p.id === peer && p.rootPath !== "")));
+        (peer !== undefined && (!s.treeLoaded || s.projects.some((p) => p.id === peer)));
       return { activeProjectId: scopedActiveProject(known ? { ...s, activeProjectId: peer } : s) };
     });
     // A mirrored arrangement counts as the layout for this session. Without this, a first `loadTree`
